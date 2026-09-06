@@ -56,8 +56,8 @@ import { API_BASE_URL } from '../services/apiClient';
 import { getMedicineByName, type Medicine } from '../services/medicine';
 import { getBatchNumbersByMedicine, type BatchInfo } from '../services/inventory';
 import { debounce } from '../utils/debounce';
-
-const TABLE_COLUMN_COUNT = 8;
+import { useNavigate } from 'react-router';
+const TABLE_COLUMN_COUNT = 9;
 const SKELETON_ROW_COUNT = 6;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -134,7 +134,19 @@ function PaymentBadge({ paymentType }: { paymentType: string }) {
   );
 }
 
+// Total GST charged on an invoice = sum of CGST + SGST (+ IGST) across every tax slab
+// stored in the invoice's tax_breakdown.
+function getInvoiceGst(row: BillingInvoiceListItem): number {
+  const breakdown = Array.isArray(row.tax_breakdown) ? row.tax_breakdown : [];
+  return breakdown.reduce(
+    (sum, slab) =>
+      sum + Number(slab.cgst ?? 0) + Number(slab.sgst ?? 0) + Number(slab.igst ?? 0),
+    0
+  );
+}
+
 export default function Invoices() {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch] = useDebouncedValue(searchTerm, 350);
   const [activePage, setActivePage] = useState(1);
@@ -645,7 +657,18 @@ export default function Invoices() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.currentTarget.value)}
             />
+
           </Group>
+         <Button
+      leftSection={<IconPlus size={16} />}
+      variant="filled"
+      color="blue"
+      h={36}
+      mt={22}
+      onClick={() => navigate('/billing')}
+    >
+      Add Billing Invoice
+    </Button>
           <ActionIcon
             variant="light"
             color="blue"
@@ -699,7 +722,8 @@ export default function Invoices() {
                 <Table.Th>Customer</Table.Th>
                 <Table.Th>Doctor</Table.Th>
                 <Table.Th>Payment</Table.Th>
-                <Table.Th ta="right">Items</Table.Th>
+                <Table.Th ta="right">GST</Table.Th>
+                <Table.Th ta="right">Total Discount</Table.Th>
                 <Table.Th ta="right">Amount</Table.Th>
                 <Table.Th ta="center">Actions</Table.Th>
               </Table.Tr>
@@ -742,7 +766,13 @@ export default function Invoices() {
                     <Table.Td>
                       <PaymentBadge paymentType={row.payment_type} />
                     </Table.Td>
-                    <Table.Td ta="right">{row.total_quantity}</Table.Td>
+                    <Table.Td ta="right" fw={500}>
+                      {money(getInvoiceGst(row))}
+                    </Table.Td>
+                    <Table.Td ta="right" c="red.7" fw={500}>
+                      −{money(Number(row.discount_amount ?? 0) + Number(row.flat_discount ?? 0))}
+                    </Table.Td>
+                   
                     <Table.Td ta="right" fw={600}>
                       {money(row.final_payable)}
                     </Table.Td>

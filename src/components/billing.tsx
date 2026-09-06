@@ -27,6 +27,7 @@ import { debounce } from '../utils/debounce';
 import { getMedicineByName, type Medicine } from '../services/medicine';
 import { getBatchNumbersByMedicine, type BatchInfo } from '../services/inventory';
 import { createBillingInvoice } from '../services/billing';
+import { useNavigate } from 'react-router';
 
 type BillingItem = {
   id: number;
@@ -92,6 +93,7 @@ const getExpiryError = (value: string) => (value && value < new Date().toISOStri
 const disabledFieldStyles = { input: { color: 'var(--mantine-color-dark-9)', opacity: 1, fontWeight: 700, WebkitTextFillColor: 'var(--mantine-color-dark-9)' } };
 
 export default function Billing() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<BillingItem[]>(initialItems);
   const [flatDiscount, setFlatDiscount] = useState<number | string>(0);
   const [paymentType, setPaymentType] = useState<string | null>('Cash');
@@ -164,7 +166,9 @@ export default function Billing() {
   };
 
   // Loads all batches recorded for the selected medicine so the user can pick one from a dropdown.
-  const loadBatchesForItem = async (id: number, medicineName: string) => {
+  // When no stock/batch exists for the medicine, it falls back to the catalog price (medicine?.price)
+  // for MRP and clears stale batch, expiry and selling values from a previously selected medicine.
+  const loadBatchesForItem = async (id: number, medicineName: string, medicine?: Medicine) => {
     setBatchLoading((prev) => ({ ...prev, [id]: true }));
     try {
       const response = await getBatchNumbersByMedicine(medicineName);
@@ -187,15 +191,31 @@ export default function Billing() {
 
       const earliestExpiringBatch = batches.find((batch) => batch.expiryDate);
 
-      if (earliestExpiringBatch) {
-        setItems((current) => current.map((item) => item.id === id ? {
+      setItems((current) => current.map((item) => {
+        if (item.id !== id) return item;
+
+        // A stock batch exists: keep the existing auto-fill using the earliest-expiring batch.
+        if (earliestExpiringBatch) {
+          return {
+            ...item,
+            batchNumber: earliestExpiringBatch.batchNumber,
+            expiryDate: earliestExpiringBatch.expiryDate.slice(0, 7),
+            mrp: earliestExpiringBatch.mrp !== undefined ? Number(earliestExpiringBatch.mrp) : item.mrp,
+            sellingPrice: earliestExpiringBatch.sellingPrice !== undefined ? Number(earliestExpiringBatch.sellingPrice) : item.sellingPrice,
+          };
+        }
+
+        // No inventory/batch for this medicine: default MRP to the catalog price (as in addinventory.tsx)
+        // and wipe batch/expiry/selling leftovers so the row doesn't keep the previous medicine's data.
+        const catalogPrice = medicine?.price != null ? Number(medicine.price) : NaN;
+        return {
           ...item,
-          batchNumber: earliestExpiringBatch.batchNumber,
-          expiryDate: earliestExpiringBatch.expiryDate.slice(0, 7),
-          mrp: earliestExpiringBatch.mrp !== undefined ? Number(earliestExpiringBatch.mrp) : item.mrp,
-          sellingPrice: earliestExpiringBatch.sellingPrice !== undefined ? Number(earliestExpiringBatch.sellingPrice) : item.sellingPrice,
-        } : item));
-      }
+          batchNumber: '',
+          expiryDate: '',
+          mrp: Number.isFinite(catalogPrice) ? catalogPrice : 0,
+          sellingPrice: 0,
+        };
+      }));
     } catch {
       setBatchOptions((prev) => ({ ...prev, [id]: [] }));
     } finally {
@@ -248,10 +268,15 @@ export default function Billing() {
   };
 
   // Fired when the user explicitly picks a medicine from the suggestion dropdown.
-  const handleMedicineSelect = (id: number, name: string) => {
+  const handleMedicineSelect = (id: number, name: string, skuId?: string | number) => {
+    // Resolve the full Medicine record (sku + price) from the current suggestions for this row
+    // so the MRP can be prefilled from medicine?.price when the medicine has no stock/batch.
+    const selectedMedicine = (medicineSuggestions[id] || []).find(
+      (med) => med.name === name && (skuId === undefined || String(med.sku_id) === String(skuId))
+    );
     updateItem(id, 'medicineName', name);
     setMedicineSuggestions((prev) => ({ ...prev, [id]: [] }));
-    loadBatchesForItem(id, name);
+    loadBatchesForItem(id, name, selectedMedicine);
   };
 
   const clearForm = () => {
@@ -415,6 +440,7 @@ export default function Billing() {
         icon: <IconAlertCircle size={18} />,
       });
     } finally {
+      navigate('/Invoices')
       setSaveLoading(false);
     }
   };
@@ -504,10 +530,8 @@ export default function Billing() {
                           handleMedicineNameSearch(item.id, cleanName);
                         }}
                         onOptionSubmit={(selectedValue) => {
-                          const [selectedId] = selectedValue.split('__');
-
-
-                          handleMedicineSelect(item.id, selectedId);
+                          const [selectedName, selectedSku] = selectedValue.split('__');
+                          handleMedicineSelect(item.id, selectedName, selectedSku);
                         }}
                         rightSection={medicineSearchLoading[item.id] ? <Loader size="xs" /> : null}
                         comboboxProps={{ withinPortal: true, width: 300, position: 'bottom-start', offset: 2 }}
