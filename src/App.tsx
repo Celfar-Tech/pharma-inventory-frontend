@@ -4,6 +4,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 
 import { LoginPage } from './components/login';
 import Header from './components/header';
+import Footer from './components/footer';
 import Sidebar from './components/sidebar';
 import Dashboard from './components/dashboard';
 import AddInventory from './components/addmedicine';
@@ -25,7 +26,6 @@ function AppLayout() {
         <Header />
         <Box 
           component="main" 
-          p="xl" 
           style={{ 
             flexGrow: 1, 
             overflowY: 'auto', 
@@ -33,7 +33,14 @@ function AppLayout() {
           }}
         >
           {/* 🌟 Outlet acts as a portal. The dashboard or inventory page injects here! */}
-          <Outlet /> 
+          <Box p="xl">
+            <Outlet />
+          </Box>
+
+          {/* 🎨 Celfar Tech creative footer — placed at the END of the scrollable
+              content, so it is no longer pinned to the viewport bottom and can
+              be reached by scrolling down the page */}
+          <Footer />
         </Box>
       </Flex>
     </Flex>
