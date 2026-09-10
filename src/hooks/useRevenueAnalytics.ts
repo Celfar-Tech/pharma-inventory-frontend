@@ -2,8 +2,8 @@
 // useRevenueAnalytics — data hook behind the dashboard revenue chart.
 //
 // Owns the full "which data am I showing?" state for the revenue widget:
-//   * timeframe        (monthly | weekly | custom)
-//   * window size      (months / weeks)
+//   * timeframe        (daily | monthly | weekly | custom)
+//   * window size      (days / months / weeks)
 //   * custom range     (startDate / endDate / granularity)
 //   * fetch lifecycle  (idle | loading | ready | error) + last error message
 //
@@ -21,6 +21,7 @@
 // (see pharma-inventory-backend/controllers/dashboard.js -> `agentTools`). An
 // in-app agent that receives a tool call can drive this chart directly:
 //
+//   getDailySales({ days: 30 })               -> setDailyWindow(30)      (timeframe already 'daily')
 //   getMonthlySales({ months: 3 })            -> setMonthlyWindow(3)     (timeframe already 'monthly')
 //   getWeeklySales({ weeks: 4 })              -> setWeeklyWindow(4)      (timeframe already 'weekly')
 //   getCustomRangeSales({ startDate, endDate, granularity })
@@ -33,6 +34,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   fetchCustomRangeRevenue,
+  fetchDailyRevenue,
   fetchMonthlyRevenue,
   fetchWeeklyRevenue,
 } from '../services/dashboardRevenue';
@@ -55,6 +57,8 @@ export interface RevenueClientIssue {
 
 export interface RevenueConfig {
   timeframe: RevenueTimeframe;
+  /** Trailing calendar days for the daily view (default 30). */
+  days: number;
   months: number;
   weeks: number;
   /** Inclusive range start in YYYY-MM-DD; '' means unset. */
@@ -65,7 +69,8 @@ export interface RevenueConfig {
 }
 
 const DEFAULT_CONFIG: RevenueConfig = {
-  timeframe: 'monthly',
+  timeframe: 'daily',
+  days: 30,
   months: 6,
   weeks: 12,
   startDate: '',
@@ -117,6 +122,7 @@ export const evaluateClientIssue = (config: RevenueConfig): RevenueClientIssue |
 export interface RevenueAnalytics {
   // ---- current selection (source of truth for the UI + agent) -------------
   timeframe: RevenueTimeframe;
+  days: number;
   months: number;
   weeks: number;
   startDate: string;
@@ -136,13 +142,14 @@ export interface RevenueAnalytics {
 
   // ---- imperative controls (UI + AI agent entry points) --------------------
   setTimeframe: (timeframe: RevenueTimeframe) => void;
+  setDailyWindow: (days: number) => void;
   setMonthlyWindow: (months: number) => void;
   setWeeklyWindow: (weeks: number) => void;
   setCustomRange: (range: { startDate: string; endDate: string; granularity?: RevenueGranularity }) => void;
   setCustomStartDate: (date: string) => void;
   setCustomEndDate: (date: string) => void;
   setGranularity: (granularity: RevenueGranularity) => void;
-  /** Clear the whole widget back to its default monthly view. */
+  /** Clear the whole widget back to its default daily view. */
   reset: () => void;
   /** Re-run the request for the current selection (used by retry buttons). */
   refresh: () => void;
@@ -168,6 +175,14 @@ export const useRevenueAnalytics = (): RevenueAnalytics => {
       ...current,
       timeframe: 'monthly',
       months: clamp(months, 1, 60),
+    }));
+  };
+
+  const setDailyWindow = (days: number): void => {
+    setConfig((current) => ({
+      ...current,
+      timeframe: 'daily',
+      days: clamp(days, 1, 370),
     }));
   };
 
@@ -256,18 +271,20 @@ export const useRevenueAnalytics = (): RevenueAnalytics => {
       try {
         const signal = controller.signal;
         const result =
-          config.timeframe === 'monthly'
-            ? await fetchMonthlyRevenue(config.months, signal)
-            : config.timeframe === 'weekly'
-              ? await fetchWeeklyRevenue(config.weeks, signal)
-              : await fetchCustomRangeRevenue(
-                  {
-                    startDate: config.startDate,
-                    endDate: config.endDate,
-                    granularity: config.granularity,
-                  },
-                  signal
-                );
+          config.timeframe === 'daily'
+            ? await fetchDailyRevenue(config.days, signal)
+            : config.timeframe === 'monthly'
+              ? await fetchMonthlyRevenue(config.months, signal)
+              : config.timeframe === 'weekly'
+                ? await fetchWeeklyRevenue(config.weeks, signal)
+                : await fetchCustomRangeRevenue(
+                    {
+                      startDate: config.startDate,
+                      endDate: config.endDate,
+                      granularity: config.granularity,
+                    },
+                    signal
+                  );
 
         if (!active) return;
         setData(result);
@@ -293,6 +310,7 @@ export const useRevenueAnalytics = (): RevenueAnalytics => {
 
   return {
     timeframe: config.timeframe,
+    days: config.days,
     months: config.months,
     weeks: config.weeks,
     startDate: config.startDate,
@@ -306,6 +324,7 @@ export const useRevenueAnalytics = (): RevenueAnalytics => {
     issue,
     canRequest,
     setTimeframe,
+    setDailyWindow,
     setMonthlyWindow,
     setWeeklyWindow,
     setCustomRange,

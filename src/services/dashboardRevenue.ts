@@ -5,6 +5,7 @@
 // pharma-inventory-backend/routes/dashboard.js (all responses are scoped to the
 // logged-in user via the session cookie — no email is sent from the client):
 //
+//   GET /dashboard/revenue/daily?days=30                        -> trailing days (default view)
 //   GET /dashboard/revenue/monthly?months=6                      -> trailing months
 //   GET /dashboard/revenue/weekly?weeks=12                       -> trailing ISO weeks
 //   GET /dashboard/revenue/range?startDate=&endDate=&granularity -> custom range
@@ -16,7 +17,7 @@
 
 import { API_BASE_URL, getHeaders, handleResponse, toApiError } from './apiClient';
 
-export type RevenueTimeframe = 'monthly' | 'weekly' | 'custom';
+export type RevenueTimeframe = 'daily' | 'monthly' | 'weekly' | 'custom';
 export type RevenueGranularity = 'day' | 'week' | 'month';
 
 export interface RevenueSeriesPoint {
@@ -116,6 +117,10 @@ const requestRevenue = async (
     throw toApiError(error, 'Failed to load dashboard revenue data');
   }
 };
+
+/** Trailing calendar days of sales revenue (default 30) — the dashboard's default view. */
+export const fetchDailyRevenue = (days = 30, signal?: AbortSignal): Promise<RevenueData> =>
+  requestRevenue('/dashboard/revenue/daily', { days }, signal);
 
 /** Trailing calendar months of sales revenue (default 6). */
 export const fetchMonthlyRevenue = (months = 6, signal?: AbortSignal): Promise<RevenueData> =>

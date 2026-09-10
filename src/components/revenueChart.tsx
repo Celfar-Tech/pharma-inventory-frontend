@@ -3,13 +3,20 @@
 //
 // The widget is a thin presentation layer over `useRevenueAnalytics`: it maps
 // user interactions (and, indirectly, AI-agent tool calls) into hook state and
-// renders the resulting time-series with Recharts.
+// renders the resulting time-series as gradient columns with Recharts.
 //
-//   * Timeframe segmented control : Monthly | Weekly | Custom date range
+//   * Timeframe segmented control : Daily | Monthly | Weekly | Custom date range
+//                                  (Daily is the default view)
 //   * Custom date pickers        : two Mantine DatePickerInputs (start / end)
 //   * Client validation          : >31 day custom ranges are blocked inline with
 //                                  "Date range cannot exceed one month."
 //   * States                     : loading skeleton, empty (no sales), error
+//
+// Chart anatomy (why it looks the way it does):
+//   * gradient columns on a soft "track" background -> easy period comparison
+//   * the strongest bucket gets a distinct cyan gradient (peak period)
+//   * a dashed average reference line + legend -> instant read of above/below avg
+//   * the hovered column is brightened (rounded hover band) instead of restyled
 // -----------------------------------------------------------------------------
 
 import '@mantine/dates/styles.css';
@@ -31,9 +38,11 @@ import {
 import { DatePickerInput } from '@mantine/dates';
 import { AlertTriangle, BarChart3, Calendar, RefreshCw, Wallet } from 'lucide-react';
 import {
-  Area,
-  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip as ChartTooltip,
   XAxis,
@@ -85,7 +94,8 @@ const formatBucket = (label: string): string => {
   const month = /^(\d{4})-(\d{2})$/.exec(label);
   if (month) return `${MONTH_NAMES[Number(month[2]) - 1]} ${month[1]}`;
   const date = parseIso(label);
-  if (date) return `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+  // Full ISO dates are day buckets — show the day so the "Best period" tile is precise.
+  if (date) return `${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
   return label;
 };
 
@@ -125,7 +135,6 @@ interface ChartDatum {
 
 interface TooltipEntry {
   name?: string | number;
-  color?: string;
   value?: number | string | ReadonlyArray<number | string>;
   payload?: ChartDatum;
 }
@@ -154,10 +163,8 @@ function ChartTip(props: {
       <div className={styles.chartTooltipLabel}>{datum ? datum.rangeLabel : String(label ?? '')}</div>
       <div className={styles.chartTooltipRow}>
         <span className={styles.chartTooltipKey}>
-          <span
-            className={styles.chartTooltipDot}
-            style={{ background: entry?.color ?? 'var(--mantine-color-teal-6)' }}
-          />
+          {/* The bar fill is an SVG gradient URL, so the swatch is styled in CSS. */}
+          <span className={styles.chartTooltipDot} />
           Revenue
         </span>
         <span className={styles.chartTooltipValue}>{formatAmount(revenue, currency)}</span>
@@ -175,9 +182,16 @@ function ChartTip(props: {
 // ---------------------------------------------------------------------------
 
 const TIMEFRAME_OPTIONS = [
+  { value: 'daily', label: 'Daily' },
   { value: 'monthly', label: 'Monthly' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'custom', label: 'Custom' },
+];
+
+const DAY_WINDOW_OPTIONS = [
+  { value: '7', label: '7 days' },
+  { value: '14', label: '14 days' },
+  { value: '30', label: '30 days' },
 ];
 
 const MONTH_WINDOW_OPTIONS = [
@@ -206,6 +220,7 @@ export default function RevenueChart() {
   const analytics = useRevenueAnalytics();
   const {
     timeframe,
+    days,
     months,
     weeks,
     startDate,
@@ -218,6 +233,7 @@ export default function RevenueChart() {
     error,
     issue,
     setTimeframe,
+    setDailyWindow,
     setMonthlyWindow,
     setWeeklyWindow,
     setCustomStartDate,
@@ -243,6 +259,19 @@ export default function RevenueChart() {
     }));
   }, [data]);
 
+  /**
+   * Mean revenue across the visible buckets — drives the dashed reference line
+   * and the "Average" legend entry. `null` when there is nothing to average.
+   */
+  const averageRevenue = useMemo(() => {
+    if (chartData.length === 0) return null;
+    const total = chartData.reduce((sum, point) => sum + point.revenue, 0);
+    return Math.round(total / chartData.length);
+  }, [chartData]);
+
+  /** Bucket label of the strongest period; rendered with the peak gradient. */
+  const peakBucket = data?.summary.bestPeriod?.label ?? null;
+
   const blocked = isCustom && issue !== null;
   const showSkeleton = isLoading && !blocked;
   const isReady = status === 'ready' && data !== null;
@@ -251,6 +280,9 @@ export default function RevenueChart() {
   const subtitle = useMemo(() => {
     if (!data) return null;
     const { range } = data;
+    if (data.timeframe === 'daily') {
+      return `Last ${days} day${days === 1 ? '' : 's'} · ${formatDay(range.startDate)} – ${formatDay(range.endDate)}`;
+    }
     if (data.timeframe === 'monthly') {
       return `Last ${months} month${months === 1 ? '' : 's'} · ${formatDay(range.startDate)} – ${formatDay(range.endDate)}`;
     }
@@ -258,7 +290,7 @@ export default function RevenueChart() {
       return `Last ${weeks} week${weeks === 1 ? '' : 's'} · ${formatDay(range.startDate)} – ${formatDay(range.endDate)}`;
     }
     return `${formatDay(range.startDate)} – ${formatDay(range.endDate)}`;
-  }, [data, months, weeks]);
+  }, [data, days, months, weeks]);
 
   const emptyMessage = ((): string => {
     if (isCustom) {
@@ -266,7 +298,12 @@ export default function RevenueChart() {
         ? `No sales were recorded between ${formatDay(startDate)} and ${formatDay(endDate)}.`
         : 'Select a date range to chart revenue.';
     }
-    const windowLabel = timeframe === 'monthly' ? `${months} month${months === 1 ? '' : 's'}` : `${weeks} week${weeks === 1 ? '' : 's'}`;
+    const windowLabel =
+      timeframe === 'daily'
+        ? `${days} day${days === 1 ? '' : 's'}`
+        : timeframe === 'monthly'
+          ? `${months} month${months === 1 ? '' : 's'}`
+          : `${weeks} week${weeks === 1 ? '' : 's'}`;
     return `No sales were recorded in the last ${windowLabel}.`;
   })();
 
@@ -275,54 +312,133 @@ export default function RevenueChart() {
   };
 
   const renderChart = () => (
-    <div className={styles.chartCanvas}>
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart
-          data={chartData}
-          margin={{ top: 12, right: 12, left: 0, bottom: 0 }}
-          accessibilityLayer
-        >
-          <defs>
-            <linearGradient id="revenueAreaFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--mantine-color-teal-5)" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="var(--mantine-color-teal-5)" stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--mantine-color-gray-2)" />
-          <XAxis
-            dataKey="bucket"
-            height={34}
-            tickLine={false}
-            axisLine={{ stroke: 'var(--mantine-color-gray-3)' }}
-            tick={{ fontSize: 11.5, fill: 'var(--mantine-color-gray-6)' }}
-            tickFormatter={(value: string) => formatAxisTick(value, data?.granularity ?? 'day')}
-            minTickGap={18}
-            interval="preserveStartEnd"
-          />
-          <YAxis
-            width={52}
-            tickLine={false}
-            axisLine={false}
-            tick={{ fontSize: 11.5, fill: 'var(--mantine-color-gray-6)' }}
-            tickFormatter={(value: number) => compactNumber(value)}
-            allowDecimals={false}
-          />
-          <ChartTooltip
-            cursor={{ stroke: 'var(--mantine-color-gray-4)', strokeDasharray: '4 4' }}
-            content={(tooltipProps) => <ChartTip {...tooltipProps} currency={currency} />}
-          />
-          <Area
-            type="monotone"
-            dataKey="revenue"
-            name="Revenue"
-            stroke="var(--mantine-color-teal-6)"
-            strokeWidth={2.5}
-            fill="url(#revenueAreaFill)"
-            dot={false}
-            activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--mantine-color-body)' }}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
+    <div className={styles.chartCanvasWrap}>
+      <div className={styles.chartCanvas}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={chartData}
+            margin={{ top: 20, right: 14, left: 0, bottom: 0 }}
+            barCategoryGap="24%"
+            accessibilityLayer
+          >
+            <defs>
+              {/* Standard column: teal gradient that deepens toward the baseline. */}
+              <linearGradient id="revenueBarFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--mantine-color-teal-4)" />
+                <stop offset="55%" stopColor="var(--mantine-color-teal-6)" />
+                <stop offset="100%" stopColor="var(--mantine-color-teal-8)" stopOpacity={0.85} />
+              </linearGradient>
+              {/* Peak period: cooler cyan-teal so the best bucket reads instantly. */}
+              <linearGradient id="revenueBarPeakFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--mantine-color-cyan-4)" />
+                <stop offset="60%" stopColor="var(--mantine-color-teal-5)" />
+                <stop offset="100%" stopColor="var(--mantine-color-teal-7)" />
+              </linearGradient>
+              {/* Hovered column: brightened, matching the rounded hover band. */}
+              <linearGradient id="revenueBarActiveFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--mantine-color-teal-1)" />
+                <stop offset="100%" stopColor="var(--mantine-color-teal-4)" />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--mantine-color-gray-2)" />
+            <XAxis
+              dataKey="bucket"
+              height={34}
+              tickLine={false}
+              axisLine={{ stroke: 'var(--mantine-color-gray-3)' }}
+              tick={{ fontSize: 11.5, fill: 'var(--mantine-color-gray-6)' }}
+              tickFormatter={(value: string) => formatAxisTick(value, data?.granularity ?? 'day')}
+              minTickGap={18}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              width={52}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fontSize: 11.5, fill: 'var(--mantine-color-gray-6)' }}
+              tickFormatter={(value: number) => compactNumber(value)}
+              allowDecimals={false}
+            />
+            <ChartTooltip
+              cursor={{
+                className: styles.barCursor,
+                fill: 'var(--mantine-color-teal-0)',
+                fillOpacity: 0.9,
+              }}
+              content={(tooltipProps) => <ChartTip {...tooltipProps} currency={currency} />}
+            />
+            {averageRevenue !== null && averageRevenue > 0 && (
+              <ReferenceLine
+                y={averageRevenue}
+                stroke="var(--mantine-color-gray-5)"
+                strokeDasharray="5 5"
+                strokeWidth={1.25}
+                label={{
+                  value: `avg ${compactNumber(averageRevenue)}`,
+                  position: 'insideTopRight',
+                  fill: 'var(--mantine-color-gray-6)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                }}
+              />
+            )}
+            <Bar
+              dataKey="revenue"
+              name="Revenue"
+              radius={[10, 10, 3, 3]}
+              maxBarSize={54}
+              minPointSize={(value: number | null | undefined) =>
+                typeof value === 'number' && value > 0 ? 3 : 0
+              }
+              background={{
+                fill: 'var(--mantine-color-gray-1)',
+                fillOpacity: 0.6,
+                // Uniform radius here: Recharts types `background`/`activeBar`
+                // radii against SVGProps, so a 4-tuple is not assignable.
+                radius: 10,
+              }}
+              activeBar={{
+                fill: 'url(#revenueBarActiveFill)',
+                stroke: 'var(--mantine-color-teal-6)',
+                strokeWidth: 1.5,
+                radius: 10,
+              }}
+              animationDuration={700}
+              animationEasing="ease-out"
+            >
+              {chartData.map((datum) => (
+                <Cell
+                  key={datum.bucket}
+                  fill={
+                    datum.bucket === peakBucket
+                      ? 'url(#revenueBarPeakFill)'
+                      : 'url(#revenueBarFill)'
+                  }
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className={styles.chartLegend}>
+        <span className={styles.chartLegendItem}>
+          <span className={styles.legendSwatchBar} />
+          Revenue per {data?.granularity ?? 'period'}
+        </span>
+        {peakBucket && (
+          <span className={styles.chartLegendItem}>
+            <span className={styles.legendSwatchPeak} />
+            Peak period
+          </span>
+        )}
+        {averageRevenue !== null && averageRevenue > 0 && (
+          <span className={styles.chartLegendItem}>
+            <span className={styles.legendSwatchAvg} />
+            Average
+          </span>
+        )}
+      </div>
     </div>
   );
 
@@ -397,9 +513,16 @@ export default function RevenueChart() {
       {!isCustom && (
         <Group gap="sm" align="center" wrap="wrap">
           <Text size="sm" fw={600} c="gray.7">
-            {timeframe === 'monthly' ? 'Show last' : 'Show last'}
+            Show last
           </Text>
-          {timeframe === 'monthly' ? (
+          {timeframe === 'daily' ? (
+            <SegmentedControl
+              data={DAY_WINDOW_OPTIONS}
+              value={String(days)}
+              onChange={(value) => setDailyWindow(Number(value))}
+              size="xs"
+            />
+          ) : timeframe === 'monthly' ? (
             <SegmentedControl
               data={MONTH_WINDOW_OPTIONS}
               value={String(months)}
@@ -505,7 +628,7 @@ export default function RevenueChart() {
               <div className={styles.statTileLabel}>Avg / {data?.granularity}</div>
               <div className={styles.statTileValue}>{summary ? formatAmount(summary.averagePerPeriod, currency) : '—'}</div>
             </div>
-            <div className={styles.statTile}>
+            <div className={`${styles.statTile} ${styles.statTileAccent}`}>
               <div className={styles.statTileLabel}>Best period</div>
               <div className={styles.statTileValue} style={{ fontSize: 14 }}>
                 {summary?.bestPeriod
@@ -541,7 +664,7 @@ export default function RevenueChart() {
               <ActionIcon variant="filled" color="teal" onClick={refresh} aria-label="Retry">
                 <RefreshCw size={16} />
               </ActionIcon>
-              <ActionIcon variant="light" color="gray" onClick={reset} aria-label="Reset to monthly view">
+              <ActionIcon variant="light" color="gray" onClick={reset} aria-label="Reset to daily view">
                 Reset view
               </ActionIcon>
             </Group>
