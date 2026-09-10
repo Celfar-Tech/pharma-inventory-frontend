@@ -1,0 +1,220 @@
+/* ---------------------------------------------------------------------------
+ * Revenue analytics chart card — scoped styles.
+ * Layout chrome uses Mantine components; these styles cover the chart stage,
+ * custom tooltip, loading skeleton and inline validation states.
+ * ------------------------------------------------------------------------- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.controlsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.dateField {
+  flex: 1 1 170px;
+  min-width: 170px;
+}
+
+.granularityField {
+  flex: 0 0 auto;
+}
+
+.rangeCaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- Chart stage --------------------------------------------------------- */
+
+.chartStage {
+  position: relative;
+  width: 100%;
+  min-height: 330px;
+}
+
+.chartCanvas {
+  width: 100%;
+  height: 330px;
+}
+
+/* Generic centered state panel (empty / validation message) */
+.statePanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 330px;
+  padding: 24px;
+  text-align: center;
+}
+
+.statePanelTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--mantine-color-gray-8);
+}
+
+.statePanelHint {
+  max-width: 460px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--mantine-color-gray-6);
+}
+
+/* ---- Skeleton ------------------------------------------------------------ */
+
+.skeletonStage {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  height: 330px;
+  padding: 8px 4px;
+}
+
+.skeletonAxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  width: 46px;
+  flex-shrink: 0;
+}
+
+.skeletonPlot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  flex: 1;
+  gap: 10px;
+}
+
+.skeletonBar {
+  flex: 1;
+  max-width: 64px;
+  border-radius: var(--mantine-radius-sm) var(--mantine-radius-sm) 0 0;
+  background: linear-gradient(180deg, var(--mantine-color-teal-1), var(--mantine-color-gray-1));
+  animation: revenue-pulse 1.4s ease-in-out infinite;
+}
+
+.skeletonBar:nth-child(2n) {
+  animation-delay: 0.15s;
+}
+
+.skeletonBar:nth-child(3n) {
+  animation-delay: 0.3s;
+}
+
+@keyframes revenue-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ---- Custom tooltip ------------------------------------------------------ */
+
+.chartTooltip {
+  background: var(--mantine-color-body);
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: var(--mantine-radius-md);
+  box-shadow: var(--mantine-shadow-lg);
+  padding: 10px 12px;
+  min-width: 180px;
+}
+
+.chartTooltipLabel {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--mantine-color-gray-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mantine-color-gray-6);
+}
+
+.chartTooltipRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 2px 0;
+  font-size: 12.5px;
+}
+
+.chartTooltipKey {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--mantine-color-gray-6);
+}
+
+.chartTooltipDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.chartTooltipValue {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--mantine-color-gray-9);
+}
+
+/* ---- KPI stat tiles ------------------------------------------------------ */
+
+.statTile {
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-gray-0);
+  padding: 12px 14px;
+}
+
+.statTileLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mantine-color-gray-6);
+}
+
+.statTileValue {
+  margin-top: 4px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--mantine-color-gray-9);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .dateField {
+    flex-basis: 100%;
+  }
+}

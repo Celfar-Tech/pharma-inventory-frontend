@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import RevenueChart from './revenueChart';
 import {
   AlertTriangle,
   Calendar,
@@ -141,173 +142,12 @@ export default function Dashboard() {
         </Grid.Col>
       </Grid>
 
-      {/* CENTRAL APP LAYOUT ROW SPLIT */}
-      <Grid gap="lg">
-        {/* LEFT COLUMN: CRITICAL DATA TABLES */}
-        <Grid.Col span={{ base: 12, lg: 8 }}>
-          <Stack gap="lg">
-            {/* Main Stock Inventory Status */}
-            <Paper p="md" withBorder shadow="xs">
-              <Title order={3} fw={700} c="gray.9" mb="md">
-                Global Stock Metrics
-              </Title>
-              <Table striped>
-                <thead>
-                  <tr>
-                    <th>Medicine Label</th>
-                    <th>Batch No.</th>
-                    <th>Available Vol.</th>
-                    <th>Exp. Window</th>
-                    <th>Status Guard</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inventory.map((item) => (
-                    <Table.Tr key={item.id}>
-                      <Table.Td fw={600} c="gray.9">{item.name}</Table.Td>
-                      <Table.Td ta="left" ff="monospace" c="gray.6">{item.batch}</Table.Td>
-                      <Table.Td>{item.stock} boxes</Table.Td>
-                      <Table.Td c="gray.6">{item.expiry}</Table.Td>
-                      <Table.Td>
-                        <Badge
-                          color={getStatusColor(item.status)}
-                          variant="light"
-                          size="sm"
-                        >
-                          {item.status}
-                        </Badge>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </tbody>
-              </Table>
-            </Paper>
+      {/* REVENUE ANALYTICS — live billing revenue trends (monthly / weekly / custom) */}
+      <Box mb="32px">
+        <RevenueChart />
+      </Box>
 
-            {/* Special Focus: Critical Warnings Box */}
-            <Grid gap="md">
-              {/* Out of Stock Warning Container */}
-              <Grid.Col span={{ base: 12, md: 6 }}>
-                <Paper p="md" withBorder>
-                  <Group align="center" gap="xs" mb="md">
-                    <Box c="red.6" lts="0">
-                      <AlertTriangle size={16} />
-                    </Box>
-                    <Title order={4} fw={700} c="red.6" size="sm">
-                      Immediate Out-of-Stock Risk
-                    </Title>
-                  </Group>
-                  {outOfStockItems.length === 0 ? (
-                    <Text size="sm" c="gray.6">
-                      All lines clean. Zero stock depletion.
-                    </Text>
-                  ) : (
-                    <ul style={{ margin: 0, paddingLeft: '18px' }}>
-                      {outOfStockItems.concat(lowStockItems).map((item) => (
-                        <li key={item.id} style={{ marginBottom: '4px' }}>
-                          <strong>{item.name}</strong> ({item.stock} left)
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Paper>
-              </Grid.Col>
-
-              {/* Impending Expiry Warnings Container */}
-              <Grid.Col span={{ base: 12, md: 6 }}>
-                <Paper p="md" withBorder>
-                  <Group align="center" gap="xs" mb="md">
-                    <Box c="orange.6" lts="0">
-                      <Calendar size={16} />
-                    </Box>
-                    <Title order={4} fw={700} c="orange.6" size="sm">
-                      Impending Expiry (&lt; 60 Days)
-                    </Title>
-                  </Group>
-                  {expiringMedicines.length === 0 ? (
-                    <Text size="sm" c="gray.6">
-                      Zero batches approaching immediate discard window.
-                    </Text>
-                  ) : (
-                    <ul style={{ margin: 0, paddingLeft: '18px' }}>
-                      {expiringMedicines.map((item) => (
-                        <li key={item.id} style={{ marginBottom: '4px' }}>
-                          {item.name} <span style={{ color: 'red', fontWeight: 600 }}>
-                            (Exp: {item.expiry})
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Paper>
-              </Grid.Col>
-            </Grid>
-          </Stack>
-        </Grid.Col>
-
-        {/* RIGHT COLUMN: AI CONSOLE & LIVE BILLING FLOW */}
-        <Grid.Col span={{ base: 12, lg: 4 }}>
-          <Stack gap="lg">
-            {/* Shelf Life Watchlist */}
-            <Paper p="md" withBorder>
-              <Group justify="space-between" align="center" mb="md">
-                <Title order={3} fw={700} c="gray.9">
-                  Shelf Life Watchlist
-                </Title>
-                <Anchor size="xs" c="blue.6" fw={600} style={{ display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
-                  View Schedule <ArrowUpRight size={14} />
-                </Anchor>
-              </Group>
-
-              <Stack gap="md">
-                {[
-                  { name: 'Cetirizine 10mg', batch: 'B-CET88', stock: 95, date: 'Aug 10', color: 'red' },
-                  { name: 'Ibuprofen 400mg', batch: 'B-IBU11', stock: 0, date: 'Aug 30', color: 'orange' },
-                  { name: 'Atorvastatin 20mg', batch: 'B-ATO08', stock: 120, date: 'Sep 01', color: 'orange' },
-                ].map((item, index) => (
-                  <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div>
-                      <Text fw={600} size="sm" c="gray.9">{item.name}</Text>
-                      <Text size="xs" c="gray.6">
-                        Batch: {item.batch} • {item.stock} boxes at risk
-                      </Text>
-                    </div>
-                    <Badge color={item.color as any} size="sm" fw={700}>
-                      {item.date}
-                    </Badge>
-                  </div>
-                ))}
-              </Stack>
-            </Paper>
-
-            {/* Recent Counter Sales Component */}
-            <Paper p="md" withBorder>
-              <Group justify="space-between" align="center" mb="md">
-                <Title order={3} fw={700} c="gray.9">
-                  Live Store Logs
-                </Title>
-                <Anchor size="xs" c="blue.6" fw={600} style={{ display: 'flex', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
-                  View Logs <ArrowUpRight size={14} />
-                </Anchor>
-              </Group>
-              <Stack gap="md">
-                {sales.map((sale) => (
-                  <div key={sale.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div>
-                      <Text fw={600} size="sm" c="gray.9">{sale.item}</Text>
-                      <Text size="xs" c="gray.6">
-                        Qty: {sale.qty} units • {sale.time}
-                      </Text>
-                    </div>
-                    <Text fw={700} size="sm" c="gray.9">
-                      ₹{sale.total}
-                    </Text>
-                  </div>
-                ))}
-              </Stack>
-            </Paper>
-          </Stack>
-        </Grid.Col>
-      </Grid>
+     
     </Container>
   );
 }
