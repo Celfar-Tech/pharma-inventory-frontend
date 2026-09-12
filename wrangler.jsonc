@@ -1,0 +1,7 @@
+{
+  "name": "pharma-inventory-frontend",
+  "compatibility_date": "2026-09-11",
+  "assets": {
+    "directory": "./dist"
+  }
+}
