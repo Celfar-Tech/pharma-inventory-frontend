@@ -30,7 +30,7 @@ npm run build
 npm run preview
 ```
 
-The app expects the backend API at the URL set via the `VITE_API_URL` environment variable (see `src/services/apiClient.ts`). The dev server is available at `http://localhost:5173/` by default.
+The app expects the backend API at the URL set via the `VITE_API_URL` environment variable (see `src/services/apiClient.ts`). The dev server is available at `http://129.121.135.236:5173/` by default.
 
 ## Features
 
