@@ -14,8 +14,20 @@ import {
   ThemeIcon,
   Anchor,
   Group,
+  Progress,
+  Badge,
+  SimpleGrid,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import {
+  ShieldCheck,
+  PackageCheck,
+  HeartPulse,
+  Activity,
+  CheckCircle2,
+  Sparkles,
+  Lock,
+} from 'lucide-react';
 import classes from './login.module.css';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../services/useAuth';
@@ -53,6 +65,52 @@ const PharmaIcon = () => (
   </svg>
 );
 
+const SLIDES = [
+  {
+    icon: ShieldCheck,
+    accent: '#38bdf8',
+    title: 'Enterprise-grade security',
+    text: 'Role-based access, encrypted sessions and full audit trails keep every prescription and record protected.',
+    chips: ['256-bit encryption', 'Role-based access'],
+  },
+  {
+    icon: PackageCheck,
+    accent: '#34d399',
+    title: 'Real-time inventory control',
+    text: 'Track stock levels, batches and suppliers live across every location — no more guesswork or stockouts.',
+    chips: ['Live sync', 'Batch tracking'],
+  },
+  {
+    icon: HeartPulse,
+    accent: '#f472b6',
+    title: 'Proactive expiry alerts',
+    text: 'Automated expiry and low-stock alerts help you act before it costs you money or patient safety.',
+    chips: ['Smart alerts', 'Patient safety'],
+  },
+  {
+    icon: Activity,
+    accent: '#fbbf24',
+    title: 'Actionable analytics',
+    text: 'Revenue, billing and inventory insights in one dashboard, so you can make faster, data-driven decisions.',
+    chips: ['Revenue insights', 'Live dashboards'],
+  },
+] as const;
+
+const passwordChecks = [
+  (pw: string) => pw.length >= 8,
+  (pw: string) => /[A-Z]/.test(pw),
+  (pw: string) => /[0-9]/.test(pw),
+  (pw: string) => /[^A-Za-z0-9]/.test(pw),
+];
+
+const getPasswordStrength = (pw: string) => {
+  const score = passwordChecks.reduce((acc, check) => acc + (check(pw) ? 1 : 0), 0);
+  if (!pw) return { score: 0, label: '', color: 'gray' };
+  const labels = ['Very weak', 'Weak', 'Fair', 'Good', 'Strong'];
+  const colors = ['red', 'orange', 'yellow', 'lime', 'teal'];
+  return { score, label: labels[score], color: colors[score] };
+};
+
 export function LoginPage() {
   const { login } = useAuth();
   const { register } = useAuth();
@@ -62,6 +120,14 @@ export function LoginPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [countdown, setCountdown] = useState(60);
   const [otpToken, setOtpToken] = useState<string | null>(null);
+  const [slideIndex, setSlideIndex] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSlideIndex((prev) => (prev + 1) % SLIDES.length);
+    }, 5000);
+    return () => clearInterval(id);
+  }, []);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -247,26 +313,104 @@ export function LoginPage() {
     setType('login');
   }, [form]);
 
-  return (
-    <Box className={classes.clinicalGradient}>
-      <Container size={440} w="100%" mx="auto">
-        <Center mb="xl" style={{ flexDirection: 'column' }}>
-          <ThemeIcon size={54} radius="xl" variant="gradient" gradient={{ from: '#0284c7', to: '#0ea5e9' }}>
-            <PharmaIcon />
-          </ThemeIcon>
-          <Title order={2} mt="md" fw={800}>PharmaConnect</Title>
-          <Text c="dimmed" size="sm" mt={4}>
-            {type === 'login' && 'Secure Portal Gateway'}
-            {type === 'register_email' && 'Create Staff Account'}
-            {type === 'register_otp' && 'Verify Your Email'}
-            {type === 'register_details' && 'Finalize Profile'}
-            {type === 'forgot_password' && 'Reset Your Password'}
-            {type === 'forgot_otp' && 'Verify Recovery Code'}
-            {type === 'forgot_reset' && 'Set a New Password'}
-          </Text>
-        </Center>
+  const strength = getPasswordStrength(form.values.password);
 
-        <Paper withBorder shadow="xl" p={32} radius="lg" className={classes.authCard}>
+  return (
+    <Box className={classes.page}>
+      {/* ===== LEFT PANEL: BRAND + FEATURE SLIDER ===== */}
+      <Box className={classes.leftPanel}>
+        <Box className={classes.gridOverlay} />
+        <Box className={classes.blobOne} />
+        <Box className={classes.blobTwo} />
+
+        <Group justify="space-between" align="flex-start" className={classes.brandRow}>
+          <Group gap="xs">
+            <ThemeIcon size={44} radius="xl" variant="gradient" gradient={{ from: '#38bdf8', to: '#0ea5e9' }} className={classes.brandIcon}>
+              <PharmaIcon />
+            </ThemeIcon>
+            <Box>
+              <Text className={classes.brandName}>PharmaConnect</Text>
+              <Text className={classes.brandTag}>Smart Pharmacy Suite</Text>
+            </Box>
+          </Group>
+          <Badge
+            className={classes.badge}
+            variant="light"
+            color="cyan"
+            style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#bae6fd', border: '1px solid rgba(255, 255, 255, 0.18)' }}
+          >
+            <Sparkles size={12} style={{ marginRight: 4 }} />
+            Trusted by 500+ pharmacies
+          </Badge>
+        </Group>
+
+        <Box className={classes.sliderStage}>
+          {SLIDES.map((slideItem, index) => {
+            const Icon = slideItem.icon;
+            return (
+              <Box key={slideItem.title} className={`${classes.slide} ${index === slideIndex ? classes.slideActive : ''}`}>
+                <ThemeIcon size={64} radius="xl" variant="light" style={{ color: slideItem.accent, backgroundColor: `${slideItem.accent}1f` }}>
+                  <Icon size={30} />
+                </ThemeIcon>
+                <Title order={2} className={classes.slideTitle}>{slideItem.title}</Title>
+                <Text className={classes.slideText}>{slideItem.text}</Text>
+                <Group gap="xs" mt="sm">
+                  {slideItem.chips.map((chip) => (
+                    <Badge
+                      key={chip}
+                      variant="outline"
+                      className={classes.chip}
+                      style={{ background: 'rgba(255, 255, 255, 0.06)', color: '#e0f2fe', borderColor: 'rgba(255, 255, 255, 0.2)' }}
+                    >
+                      <CheckCircle2 size={12} style={{ marginRight: 4 }} />
+                      {chip}
+                    </Badge>
+                  ))}
+                </Group>
+              </Box>
+            );
+          })}
+
+          <Group gap={8} className={classes.dots}>
+            {SLIDES.map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                aria-label={`Slide ${index + 1}`}
+                className={`${classes.dot} ${index === slideIndex ? classes.dotActive : ''}`}
+                onClick={() => setSlideIndex(index)}
+              />
+            ))}
+          </Group>
+        </Box>
+
+        <SimpleGrid cols={3} spacing="sm" className={classes.statsRow}>
+          <Box className={classes.stat}><Text className={classes.statValue}>99.9%</Text><Text className={classes.statLabel}>Uptime</Text></Box>
+          <Box className={classes.stat}><Text className={classes.statValue}>500+</Text><Text className={classes.statLabel}>Pharmacies</Text></Box>
+          <Box className={classes.stat}><Text className={classes.statValue}>24/7</Text><Text className={classes.statLabel}>Support</Text></Box>
+        </SimpleGrid>
+      </Box>
+
+      {/* ===== RIGHT PANEL: AUTH CARD ===== */}
+      <Box className={classes.rightPanel}>
+        <Container size={440} w="100%" mx="auto">
+          <Center mb="xl" style={{ flexDirection: 'column' }}>
+            <ThemeIcon size={54} radius="xl" variant="gradient" gradient={{ from: '#0284c7', to: '#0ea5e9' }}>
+              <PharmaIcon />
+            </ThemeIcon>
+            <Title order={2} mt="md" fw={800}>PharmaConnect</Title>
+            <Text c="dimmed" size="sm" mt={4}>
+              {type === 'login' && 'Secure Portal Gateway'}
+              {type === 'register_email' && 'Create Staff Account'}
+              {type === 'register_otp' && 'Verify Your Email'}
+              {type === 'register_details' && 'Finalize Profile'}
+              {type === 'forgot_password' && 'Reset Your Password'}
+              {type === 'forgot_otp' && 'Verify Recovery Code'}
+              {type === 'forgot_reset' && 'Set a New Password'}
+            </Text>
+          </Center>
+
+          <Paper withBorder shadow="xl" p={32} radius="lg" className={classes.authCard}>
           {successMsg && <Text c="teal" fw={600} ta="center" mb="md">{successMsg}</Text>}
 
           <form onSubmit={form.onSubmit(handleSubmit)}>
@@ -334,6 +478,15 @@ export function LoginPage() {
                   <TextInput label="Full Name" placeholder="Dr. Alex Carter" required radius="md" {...form.getInputProps('fullname')} />
                   <TextInput label="Username" placeholder="alexcarter99" required radius="md" {...form.getInputProps('username')} />
                   <PasswordInput label="Create Password" placeholder="••••••••" required radius="md" value={form.values.password} onChange={handlePasswordChange} error={form.errors.password} />
+                  {form.values.password && (
+                    <Box mt={-6}>
+                      <Group justify="space-between" mb={4}>
+                        <Text size="xs" c="dimmed">Password strength</Text>
+                        <Text size="xs" fw={700} c={strength.color}>{strength.label}</Text>
+                      </Group>
+                      <Progress value={strength.score * 25} color={strength.color} size="sm" radius="xl" />
+                    </Box>
+                  )}
                   <PasswordInput label="Confirm Password" placeholder="••••••••" required radius="md" {...form.getInputProps('confirmPassword')} />
                 </>
               )}
@@ -393,7 +546,13 @@ export function LoginPage() {
             </Group>
           )}
         </Paper>
+
+        <Group justify="center" mt="lg" gap={6}>
+          <Lock size={12} color="#94a3b8" />
+          <Text size="xs" c="gray.5">Protected by 256-bit encryption · Your data stays private</Text>
+        </Group>
       </Container>
+      </Box>
     </Box>
   );
 }
