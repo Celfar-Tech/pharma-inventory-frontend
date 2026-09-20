@@ -15,7 +15,7 @@ declare global {
 // remote API host unless VITE_API_URL is provided.
 const DEFAULT_API_BASE_URL = import.meta.env.DEV
   ? '/api'
-  : 'https://holy-morning-43a3.syedsameena266.workers.dev/';
+  : 'https://api.pharma-connect.in/';
 
 const normalizeApiBaseUrl = (value: string) => {
   const trimmed = value.trim().replace(/\/+$/, '');
