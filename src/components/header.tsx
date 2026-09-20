@@ -4,38 +4,14 @@ import { useAuth } from '../services/useAuth';
 import { useNavigate } from 'react-router';
 
 export default function Header() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const getCookieValue = (cookieName: string) => {
-    const match = document.cookie.match(new RegExp(`(?:^|; )${cookieName}=([^;]*)`));
-    return match ? match[1] : '';
-  };
-
-  const getUserFromCookie = () => {
-    const rawCookie = getCookieValue('user');
-    if (!rawCookie) return { username: 'Not Found', role: 'Unknown' };
-
-    try {
-      const parsed = JSON.parse(decodeURIComponent(rawCookie));
-      return {
-        username: parsed.username || 'Not Found',
-        role: parsed.role || 'Unknown',
-      };
-    } catch {
-      try {
-        const parsed = JSON.parse(rawCookie);
-        return {
-          username: parsed.username || 'Not Found',
-          role: parsed.role || 'Unknown',
-        };
-      } catch {
-        return { username: 'Not Found', role: 'Unknown' };
-      }
-    }
-  };
-
-  const user = getUserFromCookie();
+  // User details come from the auth context (populated by login/profile), not
+  // from cookies — the auth cookies are set on the API origin, so they are
+  // never visible to `document.cookie` from this app's origin.
+  const username = user?.username || 'Not Found';
+  const role = user?.role || 'Unknown';
 
   const handleClearSession = () => {
     logout();            // Triggers complete token destruction
@@ -127,10 +103,10 @@ export default function Header() {
 
               <Box style={{ display: 'block' }}>
                 <Text size="sm" fw={600} c="gray.8" style={{ lineHeight: 1 }}>
-                  {user.username}
+                  {username}
                 </Text>
                 <Text size="xs" c="dimmed" mt={3}>
-                  {user.role}
+                  {role}
                 </Text>
               </Box>
 

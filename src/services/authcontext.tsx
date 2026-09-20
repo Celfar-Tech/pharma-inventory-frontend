@@ -1,8 +1,9 @@
-import React, { useState, type ReactNode,useCallback } from 'react';
+import React, { useState, useEffect, type ReactNode, useCallback } from 'react';
 import {
   loginUser,
   logoutUser,
   finalizeRegistration,
+  getProfile,
 } from './user';
 import type {
   UserProfile,
@@ -19,6 +20,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const forceLogout = useCallback(() => {
     setUser(null);
     setStatus('unauthenticated');
+  }, []);
+
+  // Restore the session on app load from the server-side cookie session.
+  useEffect(() => {
+    let active = true;
+
+    (async () => {
+      try {
+        const profile = await getProfile();
+        if (active) {
+          setUser(profile);
+          setStatus('authenticated');
+        }
+      } catch {
+        if (active) {
+          setUser(null);
+          setStatus('unauthenticated');
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const login = async (credentials: LoginPayload) => {

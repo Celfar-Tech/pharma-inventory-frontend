@@ -163,6 +163,22 @@ export const finalizeRegistration = async (userData: any) => {
   }
 };
 
+export const getProfile = async (): Promise<UserProfile> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/profile`, {
+      method: 'GET',
+      headers: getHeaders(),
+      credentials: 'include',
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to load profile');
+    return data.user as UserProfile;
+  } catch (error) {
+    throw toApiError(error, 'Failed to load profile');
+  }
+};
+
 export const loginUser = async (data: LoginPayload): Promise<AuthResponse> => {
   try {
     const response = await fetch(`${API_BASE_URL}/user/login`, {
