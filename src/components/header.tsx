@@ -7,9 +7,21 @@ import {
   Burger,
   Flex,
 } from '@mantine/core';
-import { ChevronDown, LogOut, User, Settings, Bell } from 'lucide-react';
+import {
+  ChevronDown,
+  LogOut,
+  User,
+  Settings,
+  Bell,
+  LayoutDashboard,
+  Boxes,
+  ShoppingCart,
+  Receipt,
+  Pill,
+  CalendarDays,
+} from 'lucide-react';
 import { useAuth } from '../services/useAuth';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 
 interface HeaderProps {
   /** Whether the mobile navigation drawer is currently open. */
@@ -17,9 +29,76 @@ interface HeaderProps {
   onBurgerClick: () => void;
 }
 
+/** Lucide icon shape — same `typeof IconX` pattern used by footer.tsx. */
+type HeaderIcon = typeof LayoutDashboard;
+
+interface PageMeta {
+  /** Short page name shown beside the icon. */
+  title: string;
+  /** One-line description of what the screen is for. */
+  subtitle: string;
+  icon: HeaderIcon;
+}
+
+/**
+ * Header identity for every protected screen. Keyed by the exact paths
+ * declared in App.tsx, so a new route only needs one extra entry here.
+ */
+const PAGE_META: Record<string, PageMeta> = {
+  '/dashboard': {
+    title: 'Dashboard',
+    subtitle: 'Revenue, stock alerts and today at a glance',
+    icon: LayoutDashboard,
+  },
+  '/inventory': {
+    title: 'Inventory',
+    subtitle: 'Medicines, batches and expiry tracking',
+    icon: Boxes,
+  },
+  '/billing': {
+    title: 'New Billing',
+    subtitle: 'Raise a GST invoice and collect payment',
+    icon: ShoppingCart,
+  },
+  '/invoices': {
+    title: 'Invoices',
+    subtitle: 'Search, reprint and manage past bills',
+    icon: Receipt,
+  },
+};
+
+/** Shown for any path without an explicit entry. */
+const FALLBACK_META: PageMeta = {
+  title: 'PharmaConnect',
+  subtitle: 'Pharmacy inventory & billing',
+  icon: Pill,
+};
+
+/** Resolves the page identity, tolerating trailing slashes and nested paths. */
+function resolvePageMeta(pathname: string): PageMeta {
+  const clean = pathname.replace(/\/+$/, '') || '/';
+  if (PAGE_META[clean]) return PAGE_META[clean];
+  const parent = Object.keys(PAGE_META).find((path) => clean.startsWith(`${path}/`));
+  return parent ? PAGE_META[parent] : FALLBACK_META;
+}
+
 export default function Header({ mobileNavOpened, onBurgerClick }: HeaderProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // "Where am I?" — the header names the current screen, which matters on
+  // phones where the sidebar is only a drawer.
+  const pageMeta = resolvePageMeta(location.pathname);
+  const PageIcon = pageMeta.icon;
+
+  // Evaluated per render on purpose: the header needs the day, not a ticking
+  // clock, so no interval is created here.
+  const todayLabel = new Date().toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
 
   // User details come from the auth context (populated by login/profile), not
   // from cookies — the auth cookies are set on the API origin, so they are
@@ -59,6 +138,53 @@ export default function Header({ mobileNavOpened, onBurgerClick }: HeaderProps) 
           height: 20px;
           background-color: var(--mantine-color-gray-3);
           flex-shrink: 0;
+        }
+        /* ---- Current-page identity (left zone) --------------------------- */
+        .page-identity {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          /* min-width:0 lets the labels truncate instead of pushing the
+             profile menu off-screen on narrow phones. */
+          min-width: 0;
+        }
+        .page-identity-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 38px;
+          height: 38px;
+          flex-shrink: 0;
+          border-radius: 10px;
+          color: var(--mantine-color-white);
+          background: linear-gradient(
+            135deg,
+            var(--mantine-color-blue-6) 0%,
+            var(--mantine-color-cyan-5) 100%
+          );
+          box-shadow: 0 4px 10px rgba(28, 126, 214, 0.22);
+        }
+        .page-identity-text {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          min-width: 0;
+        }
+        /* Pharmacy work is date-driven (billing, expiry), so the header keeps
+           the current day visible on wide screens only. */
+        .header-date-chip {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-shrink: 0;
+          padding: 6px 10px;
+          border-radius: var(--mantine-radius-xl);
+          border: 1px solid var(--mantine-color-gray-2);
+          background-color: var(--mantine-color-gray-0);
+          color: var(--mantine-color-gray-7);
+          font-size: var(--mantine-font-size-xs);
+          font-weight: 600;
+          white-space: nowrap;
         }
         .notification-wrapper {
           position: relative;
@@ -101,10 +227,12 @@ export default function Header({ mobileNavOpened, onBurgerClick }: HeaderProps) 
         @media (max-width: 36em) {
           /* Keep the header readable on the narrowest phones: avatar only. */
           .profile-trigger { padding: 6px; gap: 0; }
+          .page-identity { gap: 8px; }
+          .page-identity-icon { width: 34px; height: 34px; }
         }
       `}</style>
 
-      {/* 1. Left Side: burger (mobile) + scope tracking */}
+      {/* 1. Left Side: burger (mobile) + current-page identity */}
       <div className="header-context-zone">
         <Burger
           opened={mobileNavOpened}
@@ -114,28 +242,34 @@ export default function Header({ mobileNavOpened, onBurgerClick }: HeaderProps) 
           aria-label="Toggle navigation menu"
         />
 
-        {/* Compact brand shown instead of the long page title on phones */}
-        <Text hiddenFrom="sm" size="sm" fw={800} c="gray.9" style={{ whiteSpace: 'nowrap' }}>
-          <span style={{ color: 'var(--mantine-color-blue-filled)' }}>Pharma</span>Track
-        </Text>
+        {/* Only meaningful while the burger is on screen, so it is hidden
+            from `md` up — same breakpoint as the burger itself. */}
+        <Box className="context-vertical-line" hiddenFrom="md" aria-hidden="true" />
 
-        <Flex visibleFrom="sm" align="center" gap="md" style={{ minWidth: 0 }}>
-          <Text size="sm" fw={700} c="gray.9" style={{ letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
-            INVENTORY MANAGEMENT
-          </Text>
+        {/* Route-aware identity: the header always names the active screen,
+            even when the desktop rail is collapsed to icons. */}
+        <div className="page-identity">
+          <div className="page-identity-icon" aria-hidden="true">
+            <PageIcon size={20} />
+          </div>
 
-          <div className="context-vertical-line" />
+          <div className="page-identity-text">
+            <Text size="sm" fw={600} c="gray.9" truncate>
+              {pageMeta.title}
+            </Text>
+            {/* Second line is dropped on the narrowest phones to keep the
+                single-line 60px header height. */}
+            <Text size="xs" c="dimmed" mt={2} truncate visibleFrom="sm">
+              {pageMeta.subtitle}
+            </Text>
+          </div>
+        </div>
 
-          <Text
-            size="xs"
-            fw={600}
-            c="blue.6"
-            visibleFrom="lg"
-            style={{ letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}
-          >
-            Central Hub
-          </Text>
-        </Flex>
+        {/* Day context — useful when raising invoices or checking expiries. */}
+        <Box className="header-date-chip" visibleFrom="lg">
+          <CalendarDays size={14} aria-hidden="true" />
+          <span>{todayLabel}</span>
+        </Box>
       </div>
 
       {/* 2. Right Side: notification actions & profile context */}
