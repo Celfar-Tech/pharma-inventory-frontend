@@ -1,22 +1,14 @@
 import RevenueChart from './revenueChart';
-import {
-  Container,
-  Box
-} from '@mantine/core';
+import { Flex } from '@mantine/core';
 
 export default function Dashboard() {
-
-
+  // No padding wrapper here on purpose: the AppShell layout already owns the
+  // responsive page gutters (16px on phones → 32px on desktop). Flex (rather
+  // than Stack) is used because its `gap` accepts breakpoint objects.
   return (
-    <Container size="xl" px="lg">
-   
-
+    <Flex direction="column" gap={{ base: 'md', md: 'xl' }}>
       {/* REVENUE ANALYTICS — live billing revenue trends (daily / monthly / weekly / custom) */}
-      <Box mb="32px">
-        <RevenueChart />
-      </Box>
-
-     
-    </Container>
+      <RevenueChart />
+    </Flex>
   );
 }

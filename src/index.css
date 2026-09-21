@@ -1,39 +1,123 @@
-/* 1. Ensure the top-level document allows full growth */
-html, body, #root {
-  margin: 0 !important;
-  padding: 0 !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  min-height: 100vh;
+/* ==========================================================================
+   PharmaTrack — global responsive foundation
+   --------------------------------------------------------------------------
+   The app is built on a Mantine AppShell:
+     [ fixed Header ]
+     [ fixed Navbar ][ single scrolling content region ]
+     [ pinned Footer ]  <- sibling of the scroll region, always at the viewport bottom
+   These rules keep that contract intact on every viewport and stop any wide
+   child (data grids, invoice tables, prints) from producing *page-level*
+   horizontal scrolling — wide content is expected to scroll locally inside
+   its own <ScrollArea> / <Table.ScrollContainer>.
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  min-height: 100dvh;
   overflow-x: hidden;
 }
 
-/* 2. Change the layout from a centered block to a full-width stretching block */
-#center {
-  display: flex;
-  flex-direction: column;
-  width: 100%;             /* Force full horizontal scale */
-  max-width: 100%;          /* Remove any implicit scaling limits */
-  flex-grow: 1;
-  /* Remove place-content: center and place-items: center so it doesn't squish elements */
-  align-items: stretch;     
-  justify-content: flex-start;
+body {
+  /* iOS Safari inflates text when a phone is rotated to landscape. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 
-  @media (max-width: 1024px) {
-    #center {
-     padding: 20px;
-     gap: 18px;
-   }
+/* ---- AppShell scroll region --------------------------------------------- */
+/* AppShell.Main is already padded by the header height, so sizing the inner
+   column to the *remaining* viewport keeps the document height at exactly
+   100dvh: the page never scrolls, only `.app-scroll-region` does. The
+   `--app-shell-header-height` variable is provided by Mantine's AppShell. */
+.app-shell-body {
+  height: calc(100dvh - var(--app-shell-header-height, 70px));
+  min-height: 0;
+}
+
+.app-scroll-region {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* Keeps the page from rubber-banding the whole document on iOS. */
+  overscroll-behavior-y: contain;
+}
+
+/* ---- Touch friendliness -------------------------------------------------- */
+@media (pointer: coarse) {
+  button,
+  [role='button'],
+  a,
+  label {
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
-/* 3. Force your steps banner to take up the full row width if you keep it */
-#next-steps {
-  display: flex;
-  width: 100%;
-  box-sizing: border-box;
-  border-top: 1px solid var(--border);
-  text-align: left;
-  
-  /* ... rest of your existing next-steps code ... */
+/* ---- Small-screen safety net -------------------------------------------- */
+@media (max-width: 48em) {
+  /* Long unbroken tokens (invoice numbers, batch codes, SKUs, e-mails) must
+     never push a card wider than the viewport. */
+  .app-shell-body {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  /* iOS Safari force-zooms the viewport when a focused field is under 16px,
+     which leaves the modal scrolled sideways afterwards. Pinning form controls
+     to 16px on phones removes that zoom without touching the desktop scale.
+     `:not(...)` keeps checkboxes/radios at their designed size. */
+  input:not([type='checkbox']):not([type='radio']),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* ---- Touch targets ------------------------------------------------------- */
+/* Coarse pointers (phones/tablets) need ~44px of height per control. Icon-only
+   action buttons stay visually compact but get a larger hit area. */
+@media (pointer: coarse) {
+  [data-touch-target] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* ---- Sticky form action bar --------------------------------------------- */
+/* Long forms (new invoice, modify invoice) keep their primary action pinned to
+   the bottom of the scroll region, so "Save" is always one thumb-tap away.
+   Used as a plain class rather than a Mantine style prop because it needs to
+   hook into the app's own scroll region and the iOS safe area. */
+.app-sticky-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  margin-top: var(--mantine-spacing-md);
+  padding: var(--mantine-spacing-sm);
+  /* Clear the home indicator on notched phones. */
+  padding-bottom: calc(var(--mantine-spacing-sm) + env(safe-area-inset-bottom, 0px));
+  background-color: var(--mantine-color-white);
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: var(--mantine-radius-md);
+  box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.06);
+}
+
+/* Inside a modal the bar is already framed by the dialog, so it only needs a
+   hairline separator against the content scrolling underneath it. */
+.app-sticky-actions.is-flush {
+  border: 0;
+  border-top: 1px solid var(--mantine-color-gray-2);
+  border-radius: 0;
+  box-shadow: none;
 }

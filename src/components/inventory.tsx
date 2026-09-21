@@ -3,10 +3,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useDebouncedValue, useDisclosure } from '@mantine/hooks';
 import {
     Container,
-    Grid,
     Paper,
     Stack,
+    Flex,
     Group,
+    SimpleGrid,
     Title,
     Text,
     TextInput,
@@ -16,8 +17,8 @@ import {
     Skeleton,
     Alert,
     Radio,
-    ScrollArea,
     Pagination, Popover, ActionIcon, Modal, Button,
+    ThemeIcon,
 } from '@mantine/core';
 import {
     IconSearch,
@@ -29,6 +30,7 @@ import {
 import { getInventoryList, deleteInventoryItem, type InventoryRecord } from '../services/inventory';
 import { API_BASE_URL } from '../services/apiClient';
 import AddInventory from './addinventory';
+import styles from './inventory.module.css';
 
 type SortOption = 'insert_date' | 'expiry_date' | 'manufacturer_name';
 
@@ -39,8 +41,20 @@ const SORT_OPTIONS: { value: SortOption; label: string; description: string }[] 
 ];
 
 const NEW_STOCK_THRESHOLD_DAYS = 7;
-const TABLE_COLUMN_COUNT = 9;
+const EXPIRY_WARNING_DAYS = 90;
+/** Medicine, Manufacturer, Batch, Compound 1, Quantity, Expiry, Status, Actions */
+const TABLE_COLUMN_COUNT = 8;
 const SKELETON_ROW_COUNT = 6;
+
+/**
+ * Minimum width the data grid needs before it starts scrolling *inside* its own
+ * container. Below this the table is panned horizontally instead of stretching
+ * the whole page — the app shell must never scroll sideways.
+ */
+const TABLE_MIN_WIDTH = 880;
+
+/** Joins conditional class names (a tiny stand-in for Mantine's `cx`). */
+const cn = (...values: Array<string | false | null | undefined>) => values.filter(Boolean).join(' ');
 
 function formatExpiryDate(dateStr: string | null): string {
     if (!dateStr) return '—';
@@ -55,33 +69,41 @@ function isNewestStock(insertDateStr: string): boolean {
     return diffDays >= 0 && diffDays <= NEW_STOCK_THRESHOLD_DAYS;
 }
 
+type ExpiryTone = 'past' | 'soon' | null;
 
-
-
+/** Colours the expiry cell red once lapsed and amber inside the warning window. */
+function getExpiryTone(dateStr: string | null): ExpiryTone {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return null;
+    const diffDays = (date.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    if (diffDays < 0) return 'past';
+    return diffDays <= EXPIRY_WARNING_DAYS ? 'soon' : null;
+}
 function renderStatusBadge(row: InventoryRecord) {
     if (row.stock_quantity === 0) {
         return (
-            <Badge color="red" variant="light" radius="sm">
+            <Badge className={styles.statusBadge} color="red" variant="light" radius="sm">
                 Out of Stock
             </Badge>
         );
     }
     if (row.stock_quantity <= (row.stock_alert_threshold ?? 10)) {
         return (
-            <Badge color="yellow" variant="light" radius="sm">
+            <Badge className={styles.statusBadge} color="yellow" variant="light" radius="sm">
                 Low Stock
             </Badge>
         );
     }
     if (isNewestStock(row.insert_date)) {
         return (
-            <Badge color="blue" variant="filled" radius="sm" leftSection={<IconSparkles size={12} />}>
+            <Badge className={styles.statusBadge} color="blue" variant="filled" radius="sm" leftSection={<IconSparkles size={12} />}>
                 Newest
             </Badge>
         );
     }
     return (
-        <Badge color="green" variant="light" radius="sm">
+        <Badge className={styles.statusBadge} color="green" variant="light" radius="sm">
             In Stock
         </Badge>
     );
@@ -199,146 +221,165 @@ export default function Inventory() {
         }
     };
     return (
-        <Container fluid px={0} py="md">
-            <Stack gap={4} mb="lg">
-                <Title order={2}>Inventory Management</Title>
+        <Container fluid px={0} py={{ base: 'sm', md: 'md' }}>
+            <Stack gap={4} mb={{ base: 'md', md: 'lg' }}>
+                <Title order={2} fz={{ base: 'h3', sm: 'h2' }}>
+                    Inventory Management
+                </Title>
                 <Text c="dimmed" size="sm">
                     Browse, search and sort medicines currently available in stock.
                 </Text>
             </Stack>
 
-            <Grid gap="lg" align="flex-start">
-                <Grid.Col span={12}>
-                    {/* Filters & Dynamic Popover Sorting Panel */}
-                    <Paper withBorder radius="md" p="md" shadow="xs" mb="md">
-                        <Group align="flex-end" gap="md" style={{ width: '100%', flexWrap: 'nowrap' }}>
-                            <Group grow style={{ flex: 1 }} align="flex-end" gap="md">
-                                <TextInput
-                                    label="Search"
-                                    placeholder="Search by medicine, manufacturer or composition..."
-                                    leftSection={<IconSearch size={16} />}
-                                    value={searchTerm}
-                                    onChange={(event) => setSearchTerm(event.currentTarget.value)}
-                                />
-                            </Group>
-                            <Popover
-                                opened={popoverOpened}
-                                onChange={toggle}
-                                position="bottom-end"
-                                withArrow
-                                shadow="md"
-                                width={320}
-                            >
-                                <Popover.Target>
-                                    <div
-                                        style={{
-                                            marginTop: 22,
-                                            height: 36,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            cursor: 'pointer'
-                                        }}
-                                        onClick={toggle}
-                                    >
-                                        <ActionIcon
-                                            variant={popoverOpened ? 'filled' : 'light'}
-                                            color="blue"
-                                            h={36}
-                                            w="auto"
-                                            px="md"
-                                            title="Sort Options"
-                                            style={{ gap: 8 }}
-                                        >
-                                            <IconArrowsSort size={16} />
-                                            <Text size="sm" fw={500} span>Order By</Text>
-                                        </ActionIcon>
-                                    </div>
-                                </Popover.Target>
+            {/* Filters & Dynamic Popover Sorting Panel.
+                Phones: everything stacks into one column and each control is a
+                full-width touch target. From `sm` up the same markup collapses
+                back into the original single desktop row. */}
+            <Paper withBorder radius="md" p={{ base: 'sm', sm: 'md' }} shadow="xs" mb={{ base: 'sm', md: 'md' }}>
+                <Flex
+                    direction={{ base: 'column', sm: 'row' }}
+                    align={{ base: 'stretch', sm: 'flex-end' }}
+                    gap={{ base: 'sm', md: 'md' }}
+                >
+                    <TextInput
+                        label="Search"
+                        placeholder="Search medicine, manufacturer or composition..."
+                        leftSection={<IconSearch size={16} />}
+                        value={searchTerm}
+                        onChange={(event) => setSearchTerm(event.currentTarget.value)}
+                        w={{ base: '100%', sm: 'auto' }}
+                        style={{ flex: 1, minWidth: 0 }}
+                    />
 
-                                <Popover.Dropdown p="md">
-                                    <Group gap={6} mb="md">
+                    {/* Action cluster: a 2-column grid means "Order By" and
+                        "Add Inventory" share one row at 50% each on phones. */}
+                    <SimpleGrid
+                        cols={2}
+                        spacing="sm"
+                        w={{ base: '100%', sm: 'auto' }}
+                        style={{ flexShrink: 0 }}
+                    >
+                        <Popover
+                            opened={popoverOpened}
+                            onChange={toggle}
+                            position="bottom-end"
+                            withArrow
+                            shadow="md"
+                            width="min(320px, calc(100vw - 32px))"
+                        >
+                            <Popover.Target>
+                                {/* A real Button (instead of a bare ActionIcon)
+                                    gives the sort control a 44px tap target. */}
+                                <Button
+                                    variant={popoverOpened ? 'filled' : 'light'}
+                                    color="blue"
+                                    h={{ base: 44, sm: 36 }}
+                                    w="100%"
+                                    px={{ base: 'xs', sm: 'md' }}
+                                    leftSection={<IconArrowsSort size={16} />}
+                                    onClick={toggle}
+                                    aria-label="Choose sort order"
+                                >
+                                    Order By
+                                </Button>
+                            </Popover.Target>
 
-
-                                    </Group>
-
-                                    <Radio.Group
-                                        value={sortOption}
-                                        onChange={(value) => {
-                                            setSortOption(value as SortOption);
-                                            close();
-                                        }}
-                                    >
-                                        <Stack gap="xs">
-                                            {SORT_OPTIONS.map((option) => (
-                                                <Paper
-                                                    key={option.value}
-                                                    withBorder
-                                                    radius="sm"
-                                                    p="sm"
-                                                    style={{
-                                                        borderColor: sortOption === option.value ? 'var(--mantine-color-blue-5)' : undefined,
-                                                        backgroundColor: sortOption === option.value ? 'var(--mantine-color-blue-0)' : undefined,
-                                                        cursor: 'pointer',
-                                                    }}
-                                                    onClick={() => {
-                                                        setSortOption(option.value);
-                                                        close();
-                                                    }}
-                                                >
-                                                    <Radio
-                                                        value={option.value}
-                                                        label={
-                                                            <Stack gap={0}>
-                                                                <Text size="sm" fw={600}>
-                                                                    {option.label}
-                                                                </Text>
-                                                                <Text size="xs" c="dimmed">
-                                                                    {option.description}
-                                                                </Text>
-                                                            </Stack>
-                                                        }
-                                                    />
-                                                </Paper>
-                                            ))}
-
-                                            <Paper withBorder radius="sm" p="sm" style={{ opacity: 0.55, cursor: 'not-allowed' }}>
-                                                <Group gap="xs" wrap="nowrap">
-                                                    <IconSparkles size={16} />
-                                                    <Stack gap={0}>
-                                                        <Text size="sm" fw={600}>
-                                                            More options
-                                                        </Text>
-                                                        <Text size="xs" c="dimmed">
-                                                            Additional sort properties coming soon
-                                                        </Text>
-                                                    </Stack>
-                                                </Group>
+                            <Popover.Dropdown p="md">
+                                <Radio.Group
+                                    value={sortOption}
+                                    onChange={(value) => {
+                                        setSortOption(value as SortOption);
+                                        close();
+                                    }}
+                                >
+                                    <Stack gap="xs">
+                                        {SORT_OPTIONS.map((option) => (
+                                            <Paper
+                                                key={option.value}
+                                                withBorder
+                                                radius="sm"
+                                                p="sm"
+                                                style={{
+                                                    borderColor: sortOption === option.value ? 'var(--mantine-color-blue-5)' : undefined,
+                                                    backgroundColor: sortOption === option.value ? 'var(--mantine-color-blue-0)' : undefined,
+                                                    cursor: 'pointer',
+                                                }}
+                                                onClick={() => {
+                                                    setSortOption(option.value);
+                                                    close();
+                                                }}
+                                            >
+                                                <Radio
+                                                    value={option.value}
+                                                    label={
+                                                        <Stack gap={0}>
+                                                            <Text size="sm" fw={600}>
+                                                                {option.label}
+                                                            </Text>
+                                                            <Text size="xs" c="dimmed">
+                                                                {option.description}
+                                                            </Text>
+                                                        </Stack>
+                                                    }
+                                                />
                                             </Paper>
-                                        </Stack>
-                                    </Radio.Group>
-                                </Popover.Dropdown>
-                            </Popover>
-                            {/* Add New Inventory */}
-                            <Button
-                                leftSection={<IconPlus size={16} />}
-                                variant="filled"
-                                color="blue"
-                                h={36}
-                                mt={22}
-                                onClick={handleAddNew}
-                            >
-                                Add Inventory
-                            </Button>
-                        </Group>
-                    </Paper>
+                                        ))}
 
-                    <Paper withBorder radius="md" p="md" shadow="xs">
-                        <Group justify="space-between" mb="md">
-                            <Title order={4}>Medicines</Title>
-                            <Text size="sm" c="dimmed">
-                                {loading ? 'Loading records…' : `${sortedRecords.length} of ${totalRecords} item${totalRecords === 1 ? '' : 's'} found`}
-                            </Text>
-                        </Group>
+                                        <Paper withBorder radius="sm" p="sm" style={{ opacity: 0.55, cursor: 'not-allowed' }}>
+                                            <Group gap="xs" wrap="nowrap">
+                                                <IconSparkles size={16} />
+                                                <Stack gap={0}>
+                                                    <Text size="sm" fw={600}>
+                                                        More options
+                                                    </Text>
+                                                    <Text size="xs" c="dimmed">
+                                                        Additional sort properties coming soon
+                                                    </Text>
+                                                </Stack>
+                                            </Group>
+                                        </Paper>
+                                    </Stack>
+                                </Radio.Group>
+                            </Popover.Dropdown>
+                        </Popover>
+
+                        {/* Add New Inventory */}
+                        <Button
+                            leftSection={<IconPlus size={16} />}
+                            variant="filled"
+                            color="blue"
+                            h={{ base: 44, sm: 36 }}
+                            w="100%"
+                            onClick={handleAddNew}
+                        >
+                            Add Inventory
+                        </Button>
+                    </SimpleGrid>
+                </Flex>
+            </Paper>
+
+            <Paper withBorder radius="md" p={{ base: 'sm', sm: 'md' }} shadow="xs">
+                <Flex justify="space-between" align="center" gap="sm" wrap="wrap" mb="md">
+                    <Group gap="xs" wrap="nowrap">
+                        <ThemeIcon variant="light" color="blue" size={32} radius="md">
+                            <IconListDetails size={18} />
+                        </ThemeIcon>
+                        <Title order={4} fz={{ base: 'h5', sm: 'h4' }}>
+                            Medicines
+                        </Title>
+                    </Group>
+                    <Badge
+                        className={styles.statusBadge}
+                        color={loading ? 'gray' : 'blue'}
+                        variant="light"
+                        radius="sm"
+                        size="md"
+                    >
+                        {loading
+                            ? 'Loading…'
+                            : `${sortedRecords.length} of ${totalRecords} item${totalRecords === 1 ? '' : 's'}`}
+                    </Badge>
+                </Flex>
 
                         {error && (
                             <Alert
@@ -353,18 +394,44 @@ export default function Inventory() {
                             </Alert>
                         )}
 
-                        <ScrollArea h={550} offsetScrollbars type="scroll" scrollbarSize={8}>
-                            <Table striped highlightOnHover verticalSpacing="sm" horizontalSpacing="md" withTableBorder stickyHeader style={{ fontSize: '70%' }}>
+                        {/*
+                            Wide data grid — BOTH axes of overflow stay inside this
+                            container, so the document itself never scrolls sideways.
+                            `maxHeight` is expressed in dvh so it adapts to mobile
+                            browser chrome without needing JS.
+                        */}
+                        <Table.ScrollContainer
+                            minWidth={TABLE_MIN_WIDTH}
+                            type="native"
+                            styles={{
+                                scrollContainer: {
+                                    maxHeight: 'min(58dvh, 620px)',
+                                    WebkitOverflowScrolling: 'touch',
+                                    overscrollBehaviorX: 'contain',
+                                },
+                            }}
+                        >
+                            <Table
+                                /* Striping and hover tint now live in the CSS module so
+                                   the header paint, zebra rows and accent bar are styled
+                                   as one system instead of two half-applied layers. */
+                                className={styles.grid}
+                                verticalSpacing="sm"
+                                horizontalSpacing="md"
+                                withTableBorder
+                                stickyHeader
+                                fz={{ base: 'xs', sm: 'sm' }}
+                            >
                                 <Table.Thead>
                                     <Table.Tr>
-                                        <Table.Th>Medicine Name</Table.Th>
-                                        <Table.Th>Manufacturer</Table.Th>
-                                        <Table.Th>Batch Number</Table.Th>
-                                        <Table.Th>Compound 1</Table.Th>
-                                        <Table.Th ta="right">Quantity</Table.Th>
-                                        <Table.Th>Expiry Date</Table.Th>
-                                        <Table.Th>Status</Table.Th>
-                                        <Table.Th ta="center">Actions</Table.Th>
+                                        <Table.Th w="24%">Medicine Name</Table.Th>
+                                        <Table.Th w="16%">Manufacturer</Table.Th>
+                                        <Table.Th w="12%">Batch Number</Table.Th>
+                                        <Table.Th w="14%">Compound 1</Table.Th>
+                                        <Table.Th w="8%" ta="right">Quantity</Table.Th>
+                                        <Table.Th w="11%">Expiry Date</Table.Th>
+                                        <Table.Th w="8%">Status</Table.Th>
+                                        <Table.Th w="7%" ta="center">Actions</Table.Th>
                                     </Table.Tr>
                                 </Table.Thead>
                                 <Table.Tbody>
@@ -382,66 +449,134 @@ export default function Inventory() {
                                     {!loading && !error && sortedRecords.length === 0 && (
                                         <Table.Tr>
                                             <Table.Td colSpan={TABLE_COLUMN_COUNT}>
-                                                <Stack align="center" gap={4} py="xl">
-                                                    <IconInbox size={28} color="var(--mantine-color-gray-5)" />
-                                                    <Text c="dimmed" size="sm">
-                                                        No inventory items match your current filters.
+                                                <div className={styles.emptyState}>
+                                                    <span className={styles.emptyIcon}>
+                                                        <IconInbox size={24} />
+                                                    </span>
+                                                    <Text fw={600} size="sm">
+                                                        No inventory items found
                                                     </Text>
-                                                </Stack>
+                                                    <Text c="dimmed" size="xs" ta="center">
+                                                        Try a different search term, or add a new medicine to get started.
+                                                    </Text>
+                                                </div>
                                             </Table.Td>
                                         </Table.Tr>
                                     )}
 
                                     {!loading &&
                                         !error &&
-                                        sortedRecords.map((row) => (
-                                            <Table.Tr key={row.id}>
-                                                <Table.Td>
+                                        sortedRecords.map((row) => {
+                                            const expiryTone = getExpiryTone(row.expiry_date);
+                                         
+                                            return (
+                                                <Table.Tr key={row.id}>
+                                                    <Table.Td>
+                                                       
+                                                            {row.name}
+                                                            <br/>
+                                                        {row.pack_size_label && (
+                                                            <span className={styles.packChip}>{row.pack_size_label}</span>
+                                                        )}
+                                                    </Table.Td>
+                                                    <Table.Td>
+                                                        
+                                                            {row.manufacturer_name || '—'}
+                                                    </Table.Td>
+                                                    <Table.Td>
+                                                        {row.batch_number ? (
+                                                            <span className={styles.codeChip}>{row.batch_number}</span>
+                                                        ) : (
+                                                            <span className={styles.placeholder}>—</span>
+                                                        )}
+                                                    </Table.Td>
+                                                    <Table.Td>
+                                                        <Text
+                                                            className={styles.truncate}
+                                                            title={row.composition1 || undefined}
+                                                            c={row.composition1 ? undefined : 'dimmed'}
+                                                            size="sm"
+                                                        >
+                                                            {row.composition1 || '—'}
+                                                        </Text>
+                                                    </Table.Td>
+                                                    <Table.Td className={styles.numeric}>
+                                                       
+                                                            {row.stock_quantity}
+                                                       
+                                                    </Table.Td>
+                                                    <Table.Td className={styles.numeric}>
+                                                        <span
+                                                            className={cn(
+                                                                styles.expiry,
+                                                                expiryTone === 'soon' && styles.expirySoon,
+                                                                expiryTone === 'past' && styles.expiryPast
+                                                            )}
+                                                        >
+                                                            {formatExpiryDate(row.expiry_date)}
+                                                        </span>
+                                                    </Table.Td>
+                                                    <Table.Td>{renderStatusBadge(row)}</Table.Td>
+                                                    <Table.Td>
+                                                        <Group justify="center" gap="xs" wrap="nowrap">
+                                                            {/* `data-touch-target` bumps these
+                                                                icon buttons to a 44px hit area on
+                                                                touch devices only (see index.css). */}
+                                                            <ActionIcon
+                                                                data-touch-target
+                                                                className={styles.iconButton}
+                                                                variant="subtle"
+                                                                color="blue"
+                                                                radius="md"
+                                                                size={32}
+                                                                onClick={() => handleUpdateRecord(row)}
+                                                                aria-label={`Edit ${row.name}`}
+                                                            >
+                                                                <IconEdit size={16} />
+                                                            </ActionIcon>
 
-                                                    <b>   {row.name}</b>
-                                                    <br></br>
-
-
-                                                    {row.pack_size_label}
-
-
-                                                </Table.Td>
-                                                <Table.Td>{row.manufacturer_name}</Table.Td>
-                                                <Table.Td>{row.batch_number || '—'}</Table.Td>
-                                                <Table.Td>{row.composition1 || '—'}</Table.Td>
-                                                <Table.Td ta="right">{row.stock_quantity}</Table.Td>
-                                                <Table.Td>
-                                                    <Group gap={4} wrap="nowrap">
-                                                    
-                                                        {formatExpiryDate(row.expiry_date)}
-
-                                                    </Group>
-                                                </Table.Td>
-                                                <Table.Td>{renderStatusBadge(row)}</Table.Td>
-                                                <Table.Td>
-                                                    <Group justify="center" gap={4} wrap="nowrap">
-                                                        <ActionIcon variant="subtle" color="blue" size="sm" onClick={() => handleUpdateRecord(row)}>
-                                                            <IconEdit style={{ width: 16, height: 16 }} />
-                                                        </ActionIcon>
-
-                                                        <ActionIcon variant="subtle" color="red" size="sm" onClick={() => setDeleteRecord(row)}>
-                                                            <IconTrash style={{ width: 16, height: 16 }} />
-                                                        </ActionIcon>
-                                                    </Group>
-                                                </Table.Td>
-                                            </Table.Tr>
-                                        ))}
+                                                            <ActionIcon
+                                                                data-touch-target
+                                                                className={styles.iconButton}
+                                                                variant="subtle"
+                                                                color="red"
+                                                                radius="md"
+                                                                size={32}
+                                                                onClick={() => setDeleteRecord(row)}
+                                                                aria-label={`Delete ${row.name}`}
+                                                            >
+                                                                <IconTrash size={16} />
+                                                            </ActionIcon>
+                                                        </Group>
+                                                    </Table.Td>
+                                                </Table.Tr>
+                                            );
+                                        })}
                                 </Table.Tbody>
                             </Table>
-                        </ScrollArea>
+                        </Table.ScrollContainer>
 
-                        <Group justify="space-between" mt="md">
+                        {/* Panning hint — only meaningful while the grid is
+                            actually overflowing, i.e. below the `md` breakpoint. */}
+                        <Text size="xs" c="dimmed" ta="center" mt="xs" hiddenFrom="md">
+                            Swipe the table sideways to see every column
+                        </Text>
+
+                        {/* Pagination bar: stacked and centered on phones, a
+                            single spread row from `sm` up. */}
+                        <Flex
+                            direction={{ base: 'column-reverse', sm: 'row' }}
+                            justify={{ base: 'center', sm: 'space-between' }}
+                            align="center"
+                            gap="sm"
+                            mt="md"
+                        >
                             <Select
                                 value={String(pageSize)}
                                 onChange={(value) => setPageSize(Number(value) || 10)}
                                 data={['5', '10', '20', '50']}
                                 leftSection={<IconListDetails size={16} />}
-                                w={90}
+                                w={{ base: '100%', sm: '6rem' }}
                                 size="sm"
                                 radius="md"
                                 allowDeselect={false}
@@ -456,28 +591,42 @@ export default function Inventory() {
                                     siblings={1}
                                 />
                             )}
-                        </Group>
+                        </Flex>
                     </Paper>
-                </Grid.Col>
-
-
-            </Grid>
 
             <Modal
                 opened={!!deleteRecord}
                 onClose={() => setDeleteRecord(null)}
-                title={<Text fw={700} color="red.7">Warning: Permanent Action</Text>}
-
-                centered={false}
+                title={<Text fw={700} c="red.7">Warning: Permanent Action</Text>}
+                centered
+                size="sm"
                 overlayProps={{ backgroundOpacity: 0.55, blur: 3 }}
             >
                 <Text size="sm" mb="lg">
                     Are you sure you want to delete <strong>{deleteRecord?.name}</strong>?
                 </Text>
-                <Group justify="flex-end" gap="sm">
-                    <Button variant="light" color="gray" size="xs" onClick={() => setDeleteRecord(null)}>Cancel</Button>
-                    <Button variant="filled" color="red" size="xs" onClick={handleDeleteRecord}>Yes, Delete</Button>
-                </Group>
+                {/* Destructive actions stack full-width on phones so the
+                    primary choice cannot be mis-tapped by a thumb. */}
+                <Flex direction={{ base: 'column-reverse', sm: 'row' }} justify="flex-end" gap="sm">
+                    <Button
+                        variant="light"
+                        color="gray"
+                        size="sm"
+                        w={{ base: '100%', sm: 'auto' }}
+                        onClick={() => setDeleteRecord(null)}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="filled"
+                        color="red"
+                        size="sm"
+                        w={{ base: '100%', sm: 'auto' }}
+                        onClick={handleDeleteRecord}
+                    >
+                        Yes, Delete
+                    </Button>
+                </Flex>
             </Modal>
             <AddInventory
                 opened={modalOpen}

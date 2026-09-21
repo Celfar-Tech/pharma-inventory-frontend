@@ -3,6 +3,7 @@ import {
   Modal,
   Textarea,
   SimpleGrid,
+  Flex,
   Stack,
   Box,
   TextInput,
@@ -17,6 +18,7 @@ import {
   Loader,
   Tooltip 
 } from '@mantine/core';
+import { useMediaQuery } from '@mantine/hooks';
 import {
   IconAlertTriangle,
   IconCheck,
@@ -35,6 +37,17 @@ import { getManufacturerName, type Manufacturer } from '../services/manufacturer
 
 // Canonical medicine categories. MUST match the <Select data> options below.
 const MEDICINE_TYPES = ['Allopathy', 'Ayurvedic', 'Homeopathy', 'Surgical', 'Other'];
+
+/**
+ * Below this width the form modal goes full screen. A 80%-wide, 1,100px-tall
+ * dialog is unusable on a phone, and `Modal`'s `size` prop is *not* a style
+ * prop, so it cannot take a responsive object — this is the one structural
+ * change that genuinely needs a media query.
+ */
+const MOBILE_MODAL_QUERY = '(max-width: 48em)';
+/** Horizontal/vertical modal gutters, in px, per viewport. */
+const MODAL_PAD_DESKTOP = 32;
+const MODAL_PAD_MOBILE = 16;
 
 /**
  * Normalizes any incoming medicine type value to a canonical Select option.
@@ -84,6 +97,12 @@ export default function InventoryModalForm({
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [warningModalOpened, setWarningModalOpened] = useState<boolean>(false);
+
+  // --- RESPONSIVE LAYOUT ---
+  // Only used for the two things CSS alone cannot express: the modal's
+  // `fullScreen` switch and the px-precise math behind the sticky action bar.
+  const isMobileModal = useMediaQuery(MOBILE_MODAL_QUERY);
+  const modalPad = isMobileModal ? MODAL_PAD_MOBILE : MODAL_PAD_DESKTOP;
 
   // --- API FETCHING STATES ---
   const [suggestions, setSuggestions] = useState<Medicine[]>([]);
@@ -433,41 +452,47 @@ export default function InventoryModalForm({
       <Modal
         opened={opened}
         onClose={onClose}
+        // Phones get the full screen instead of a cramped 80%-wide dialog.
+        fullScreen={isMobileModal}
         size="80%"
         radius="24px"
         centered
         withCloseButton
+        padding={`${modalPad}px`}
         title={
-          <Group gap="sm">
+          <Group gap="sm" wrap="nowrap">
             <ThemeIcon variant="light" color="blue" size="lg" radius="md">
               <IconPill size={20} />
             </ThemeIcon>
-            <Box>
-              <Text fw={700} size="lg" c="#0f172a" style={{ lineHeight: 1.2 }}>
+            <Box style={{ minWidth: 0 }}>
+              <Text fw={700} fz={{ base: 'md', sm: 'lg' }} c="#0f172a" style={{ lineHeight: 1.2 }}>
                 {initialData ? "Edit Medicine Details" : "Add New Medicine"}
               </Text>
-              <Text size="xs" c="slate.5" fw={400}>
+              <Text size="xs" c="slate.5" fw={400} visibleFrom="sm">
                 Enter basic medicine details, prices, and locations below.
               </Text>
             </Box>
           </Group>
         }
         styles={{
-          header: { backgroundColor: '#ffffff', borderBottom: '1px solid #f1f5f9', padding: '24px 32px' },
+          // Gutters come from the `padding` prop (surfaced as `--mb-padding`)
+          // so they stay in sync with the sticky action bar below.
+          header: { backgroundColor: '#ffffff', borderBottom: '1px solid #f1f5f9' },
           close: { color: '#cbd5e1', borderRadius: '50%', '&:hover': { backgroundColor: '#f1f5f9', color: '#0f172a' } },
-          body: { padding: '32px', backgroundColor: '#f8fafc' },
+          body: { backgroundColor: '#f8fafc' },
           overlay: { backdropFilter: 'blur(8px)', backgroundColor: 'rgba(15, 23, 42, 0.25)' }
         }}
       >
-        <Stack gap="xl">
+        <Flex direction="column" gap={{ base: 'md', md: 'xl' }}>
           {/* SECTION 1: Product Definition */}
-          <Box style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', border: '1px solid #edf2f7' }}>
-            <Group gap="xs" mb="md">
-              <IconPill size={16} style={{ color: '#228be6' }} />
+          <Box p={{ base: 'md', md: 'lg' }} style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #edf2f7' }}>
+            <Group gap="xs" mb="md" wrap="nowrap">
+              <IconPill size={16} style={{ color: '#228be6', flexShrink: 0 }} />
               <Text fw={700} size="sm" c="#1e293b">1. Basic Medicine & Batch Details</Text>
             </Group>
 
-            <SimpleGrid cols={{ base: 1, sm: 4 }} spacing="lg">
+            {/* 1 column on phones, 2 on large phones/small tablets, 4 on desktop */}
+            <SimpleGrid cols={{ base: 1, xs: 2, lg: 4 }} spacing="md">
               <Box>
 
                 <Autocomplete
@@ -544,13 +569,13 @@ export default function InventoryModalForm({
           </Box>
 
           {/* SECTION 2: Formulations & Lineage */}
-          <Box style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', border: '1px solid #edf2f7' }}>
-            <Group gap="xs" mb="md">
-              <IconFlask size={16} style={{ color: '#228be6' }} />
+          <Box p={{ base: 'md', md: 'lg' }} style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #edf2f7' }}>
+            <Group gap="xs" mb="md" wrap="nowrap">
+              <IconFlask size={16} style={{ color: '#228be6', flexShrink: 0 }} />
               <Text fw={700} size="sm" c="#1e293b">2. Category & Manufacturer Info</Text>
             </Group>
 
-            <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
               <Box>
                 <Autocomplete
                   label={renderLabelWithTooltip(
@@ -615,13 +640,13 @@ export default function InventoryModalForm({
           </Box>
 
           {/* SECTION 3: Valuation, Volumes & Assets */}
-          <Box style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', border: '1px solid #edf2f7' }}>
-            <Group gap="xs" mb="lg">
-              <IconCoins size={16} style={{ color: '#228be6' }} />
+          <Box p={{ base: 'md', md: 'lg' }} style={{ backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #edf2f7' }}>
+            <Group gap="xs" mb="lg" wrap="nowrap">
+              <IconCoins size={16} style={{ color: '#228be6', flexShrink: 0 }} />
               <Text fw={700} size="sm" c="#1e293b">3. Pricing & Storage Locations</Text>
             </Group>
 
-            <SimpleGrid cols={{ base: 1, md: 3 }} spacing="xl">
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
               <Stack gap="md">
                 <NumberInput
                   label={renderLabelWithTooltip(
@@ -703,9 +728,9 @@ export default function InventoryModalForm({
                   'Package photo to help visual verification during receiving and dispensing.'
                 )}
                 <Box
+                  h={{ base: 180, sm: 230 }}
                   style={{
                     width: '100%',
-                    height: '230px', // Fixed height to provide ample viewing space
                     backgroundColor: '#ffffff',
                     border: '1.5px dashed #cbd5e1',
                     borderRadius: '12px',
@@ -731,17 +756,36 @@ export default function InventoryModalForm({
               </Stack>
             </SimpleGrid>
           </Box>
-        </Stack>
+        </Flex>
 
-        <Box mt={32}>
-          <Divider color="#e2e8f0" mb="xl" />
-          <Group justify="flex-end" gap="md">
+        {/*
+          Sticky action bar. The modal content is the scroll container, so
+          `position: sticky` keeps Save reachable without scrolling past 11
+          fields. The negative inline/bottom margins cancel the modal's gutter
+          so the bar spans edge-to-edge, and mobile stacks the buttons
+          full-width for thumb-sized targets.
+        */}
+        <Box
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            zIndex: 3,
+            marginInline: -modalPad,
+            marginBottom: -modalPad,
+            marginTop: 24,
+            padding: `${Math.round(modalPad * 0.75)}px ${modalPad}px`,
+            backgroundColor: '#ffffff',
+            borderTop: '1px solid #e2e8f0',
+          }}
+        >
+          <Flex direction={{ base: 'column-reverse', sm: 'row' }} justify="flex-end" gap="sm">
             <Button
               variant="subtle"
               color="gray"
               size="md"
               leftSection={<IconX size={16} />}
               style={{ borderRadius: '10px', color: '#64748b' }}
+              w={{ base: '100%', sm: 'auto' }}
               onClick={onClose}
               disabled={isSaving}
             >
@@ -752,12 +796,13 @@ export default function InventoryModalForm({
               size="md"
               leftSection={<IconCheck size={16} />}
               style={{ borderRadius: '10px', fontWeight: 600 }}
+              w={{ base: '100%', sm: 'auto' }}
               onClick={handleInitialSubmitCheck}
               loading={isSaving}
             >
               Save Stock Registry
             </Button>
-          </Group>
+          </Flex>
         </Box>
       </Modal>
 
@@ -768,8 +813,9 @@ export default function InventoryModalForm({
         radius="16px"
         centered
         withCloseButton={false}
+        // Small dialogs need less breathing room on a phone.
+        padding={isMobileModal ? '20px' : '24px'}
         styles={{
-          body: { padding: '24px' },
           overlay: {
             backdropFilter: 'blur(4px)',
             backgroundColor: 'rgba(15, 23, 42, 0.4)',
@@ -792,17 +838,18 @@ export default function InventoryModalForm({
 
           <Divider color="#f1f5f9" style={{ width: '100%' }} mt="xs" />
 
-          <Group justify="center" gap="sm" style={{ width: '100%' }}>
+          {/* Phones: one full-width button per row. From `xs` up: a 50/50 split. */}
+          <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm" w="100%">
             <Button
               variant="subtle"
               color="gray"
               onClick={() => setWarningModalOpened(false)}
               style={{
                 borderRadius: '8px',
-                flex: 1,
                 border: '1px solid #cbd5e1',
                 color: '#000000'
               }}
+              h={{ base: 44, sm: 36 }}
             >
               Cancel & Fix
             </Button>
@@ -812,14 +859,14 @@ export default function InventoryModalForm({
               loading={isSaving}
               style={{
                 borderRadius: '8px',
-                flex: 1,
                 border: '1px solid #cbd5e1',
                 color: '#000000'
               }}
+              h={{ base: 44, sm: 36 }}
             >
               Yes, Save Anyway
             </Button>
-          </Group>
+          </SimpleGrid>
         </Stack>
       </Modal>
     </>

@@ -1,0 +1,52 @@
+/* ---------------------------------------------------------------------------
+ * Invoices (list + modals) — scoped presentation layer.
+ *
+ * Layout and responsiveness come from Mantine breakpoint props; this file
+ * paints what Mantine has no prop for: the mobile invoice card, local scroll
+ * polish and the A4 print preview viewport.
+ * ------------------------------------------------------------------------- */
+
+/* ---- Local scroll containers -------------------------------------------- */
+/* The invoice grid scrolls in both axes *inside* its own container, so the
+   page itself never scrolls sideways or grows past one viewport of rows. */
+.scrollRegion {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+/* ---- Mobile invoice card ------------------------------------------------- */
+/* Phones and small tablets get one card per invoice instead of a 9-column
+   grid; hover/focus only lifts the card on devices that have a pointer. */
+.rowCard {
+  transition: box-shadow 140ms ease, border-color 140ms ease;
+}
+
+@media (hover: hover) {
+  .rowCard:hover {
+    border-color: var(--mantine-color-blue-3);
+    box-shadow: var(--mantine-shadow-sm);
+  }
+}
+
+/* ---- Codes & amounts ---------------------------------------------------- */
+/* Invoice numbers, batch codes and money stay on one line and never push a
+   card wider than the viewport. */
+.code {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+
+.money {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- Print preview ------------------------------------------------------ */
+/* The preview keeps the real A4 sheet (794px) at 1:1 so html2canvas produces
+   the same pixels the PDF gets; the viewport pans instead of shrinking. */
+.previewViewport {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
