@@ -25,6 +25,7 @@ import {
   HeartPulse,
   Activity,
   CheckCircle2,
+  XCircle,
   Sparkles,
   Lock,
 } from 'lucide-react';
@@ -96,20 +97,86 @@ const SLIDES = [
   },
 ] as const;
 
-const passwordChecks = [
-  (pw: string) => pw.length >= 8,
-  (pw: string) => /[A-Z]/.test(pw),
-  (pw: string) => /[0-9]/.test(pw),
-  (pw: string) => /[^A-Za-z0-9]/.test(pw),
-];
+/**
+ * Single source of truth for the password policy: the checklist, the strength
+ * meter and the form validation all read from this list so they can never drift
+ * apart.
+ */
+const PASSWORD_POLICY = [
+  {
+    id: 'length',
+    label: 'At least 8 characters',
+    requirement: 'at least 8 characters',
+    test: (pw: string) => pw.length >= 8,
+  },
+  {
+    id: 'uppercase',
+    label: 'One uppercase letter (A–Z)',
+    requirement: 'an uppercase letter',
+    test: (pw: string) => /[A-Z]/.test(pw),
+  },
+  {
+    id: 'number',
+    label: 'One number (0–9)',
+    requirement: 'a number',
+    test: (pw: string) => /[0-9]/.test(pw),
+  },
+  {
+    id: 'symbol',
+    label: 'One special character (!@#$…)',
+    requirement: 'a special character',
+    test: (pw: string) => /[^A-Za-z0-9]/.test(pw),
+  },
+] as const;
+
+const formatList = (items: string[]) =>
+  items.length <= 1 ? items[0] ?? '' : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+
+/** Human-readable reason a password is rejected, or `null` when it satisfies the policy. */
+const getPasswordPolicyError = (pw: string) => {
+  if (!pw) return 'Password is required';
+  const missing = PASSWORD_POLICY.filter((rule) => !rule.test(pw)).map((rule) => rule.requirement);
+  return missing.length > 0 ? `Password is too weak — it needs ${formatList(missing)}.` : null;
+};
 
 const getPasswordStrength = (pw: string) => {
-  const score = passwordChecks.reduce((acc, check) => acc + (check(pw) ? 1 : 0), 0);
   if (!pw) return { score: 0, label: '', color: 'gray' };
+  const score = PASSWORD_POLICY.reduce((acc, rule) => acc + (rule.test(pw) ? 1 : 0), 0);
   const labels = ['Very weak', 'Weak', 'Fair', 'Good', 'Strong'];
   const colors = ['red', 'orange', 'yellow', 'lime', 'teal'];
   return { score, label: labels[score], color: colors[score] };
 };
+
+/** Live strength meter plus a per-rule checklist so a weak password is flagged while typing. */
+function PasswordFeedback({ password }: { password: string }) {
+  if (!password) return null;
+  const strength = getPasswordStrength(password);
+
+  return (
+    <Box mt={-6}>
+      <Group justify="space-between" mb={4}>
+        <Text size="xs" c="dimmed">Password strength</Text>
+        <Text size="xs" fw={700} c={strength.color}>{strength.label}</Text>
+      </Group>
+      <Progress value={strength.score * 25} color={strength.color} size="sm" radius="xl" />
+      <Stack gap={4} mt={8}>
+        {PASSWORD_POLICY.map((rule) => {
+          const met = rule.test(password);
+          return (
+            <Group key={rule.id} gap={6} wrap="nowrap">
+              {met ? (
+                <CheckCircle2 size={13} color="#0d9488" aria-hidden />
+              ) : (
+                <XCircle size={13} color="#e11d48" aria-hidden />
+              )}
+              <Text size="xs" c={met ? 'teal.7' : 'red.6'}>{rule.label}</Text>
+            </Group>
+          );
+        })}
+      </Stack>
+    </Box>
+  );
+}
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -150,7 +217,13 @@ export function LoginPage() {
       otp: (val) => (type === 'register_otp' || type === 'forgot_otp') && val.trim().length !== 6 ? 'Please enter the 6-digit code' : null,
       fullname: (val) => type === 'register_details' && val.trim().length < 2 ? 'Full name required' : null,
       username: (val) => type === 'register_details' && val.trim().length < 3 ? 'Username required' : null,
-      password: (val) => (type === 'login' || type === 'register_details' || type === 'forgot_reset') && val.length < 6 ? 'Password too short' : null,
+      password: (val) => {
+        // Creating or resetting a password must satisfy the full policy.
+        if (type === 'register_details' || type === 'forgot_reset') {
+          return getPasswordPolicyError(val);
+        }
+        return type === 'login' && val.length < 6 ? 'Password too short' : null;
+      },
       confirmPassword: (val, values) => (type === 'register_details' || type === 'forgot_reset') && val !== values.password ? 'Passwords do not match' : null,
     },
   });
@@ -238,8 +311,20 @@ export function LoginPage() {
             password: values.password,
           });
 
-          setSuccessMsg('Account created successfully!');
-          navigate('/dashboard');
+          // `register` only creates the account on the server - it does not open a
+          // session. Navigating straight to /dashboard would make ProtectedRoute
+          // bounce back to the login screen, so sign in with the credentials that
+          // were just created and fall back to the login step if that fails.
+          try {
+            await login({ email: values.email, password: values.password });
+            setSuccessMsg('Account created successfully!');
+            navigate('/dashboard');
+          } catch {
+            setSuccessMsg('Account created successfully! Please sign in to continue.');
+            form.setFieldValue('password', '');
+            form.setFieldValue('confirmPassword', '');
+            setType('login');
+          }
         } else if (type === 'forgot_password') {
           const data = await requestPasswordResetOtp(values.email);
           const payload = data && data.data ? data.data : data;
@@ -312,8 +397,6 @@ export function LoginPage() {
     setCountdown(60);
     setType('login');
   }, [form]);
-
-  const strength = getPasswordStrength(form.values.password);
 
   return (
     <Box className={classes.page}>
@@ -452,7 +535,17 @@ export function LoginPage() {
               {type === 'forgot_reset' && (
                 <>
                   <TextInput label="Work Email" disabled radius="md" value={form.values.email} description="Verified Email Address" />
-                  <PasswordInput label="New Password" placeholder="••••••••" required radius="md" value={form.values.password} onChange={handlePasswordChange} error={form.errors.password} />
+                  <PasswordInput
+                    label="New Password"
+                    placeholder="••••••••"
+                    required
+                    radius="md"
+                    value={form.values.password}
+                    onChange={handlePasswordChange}
+                    onBlur={() => form.validateField('password')}
+                    error={form.errors.password}
+                  />
+                  <PasswordFeedback password={form.values.password} />
                   <PasswordInput label="Confirm New Password" placeholder="••••••••" required radius="md" {...form.getInputProps('confirmPassword')} />
                 </>
               )}
@@ -477,16 +570,17 @@ export function LoginPage() {
                   <TextInput label="Work Email" disabled radius="md" value={form.values.email} description="Verified Email Address" />
                   <TextInput label="Full Name" placeholder="Dr. Alex Carter" required radius="md" {...form.getInputProps('fullname')} />
                   <TextInput label="Username" placeholder="alexcarter99" required radius="md" {...form.getInputProps('username')} />
-                  <PasswordInput label="Create Password" placeholder="••••••••" required radius="md" value={form.values.password} onChange={handlePasswordChange} error={form.errors.password} />
-                  {form.values.password && (
-                    <Box mt={-6}>
-                      <Group justify="space-between" mb={4}>
-                        <Text size="xs" c="dimmed">Password strength</Text>
-                        <Text size="xs" fw={700} c={strength.color}>{strength.label}</Text>
-                      </Group>
-                      <Progress value={strength.score * 25} color={strength.color} size="sm" radius="xl" />
-                    </Box>
-                  )}
+                  <PasswordInput
+                    label="Create Password"
+                    placeholder="••••••••"
+                    required
+                    radius="md"
+                    value={form.values.password}
+                    onChange={handlePasswordChange}
+                    onBlur={() => form.validateField('password')}
+                    error={form.errors.password}
+                  />
+                  <PasswordFeedback password={form.values.password} />
                   <PasswordInput label="Confirm Password" placeholder="••••••••" required radius="md" {...form.getInputProps('confirmPassword')} />
                 </>
               )}

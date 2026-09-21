@@ -152,7 +152,7 @@ export default function Footer() {
 
                 {/* copyright */}
                 <Text className="pt-footer-copy" size="xs" c="gray.6" ta="center">
-                    © {year} PharmaTrack · All rights reserved.
+                    © {year} Pharma-Connect · All rights reserved.
                 </Text>
 
                 {/* socials + back to top */}

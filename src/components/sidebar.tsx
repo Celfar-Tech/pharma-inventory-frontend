@@ -88,7 +88,7 @@ export default function Sidebar({
           <Group gap="xs" wrap="nowrap">
             <Pill size={24} color="blue" style={{ border: 'none', flexShrink: 0 }} />
             <Title order={4} c="dark.4" style={{ whiteSpace: 'nowrap' }}>
-              <span style={{ color: 'var(--mantine-color-blue-filled)' }}>Pharma</span>Track
+              <span style={{ color: 'var(--mantine-color-blue-filled)' }}>Pharma</span>Connect
             </Title>
           </Group>
         )}
