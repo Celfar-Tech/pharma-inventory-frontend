@@ -1,0 +1,240 @@
+/* ---------------------------------------------------------------------------
+ * Inventory data grid — scoped presentation layer.
+ * Layout/responsiveness still comes from Mantine (breakpoint props, touch
+ * targets, scroll container); this file only *paints* the grid so the markup
+ * stays declarative and everything keeps resolving through Mantine's theme
+ * variables (including dark mode).
+ * ------------------------------------------------------------------------- */
+
+/* ---- Shell --------------------------------------------------------------- */
+
+.grid {
+  /* Separate borders so the sticky header keeps its own edges while the body
+     cells draw the hairlines, instead of doubling them up. */
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* ---- Header row ---------------------------------------------------------- */
+
+.grid thead tr th {
+  background-color: var(--mantine-color-gray-0);
+  color: var(--mantine-color-gray-7);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding-block: 13px;
+  border-bottom: 2px solid var(--mantine-color-blue-2);
+}
+
+/* ---- Body rows ----------------------------------------------------------- */
+
+.grid tbody tr {
+  transition: background-color 140ms ease;
+}
+
+/* Zebra banding — a whisper of grey, never a stripe you actually notice. */
+.grid tbody tr:nth-child(even) {
+  background-color: var(--mantine-color-gray-0);
+}
+
+.grid tbody tr > td {
+  border-bottom: 1px solid var(--mantine-color-gray-2);
+  padding-block: 12px;
+  vertical-align: middle;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.grid tbody tr:last-child > td {
+  border-bottom: none;
+}
+
+/* Hover: tinted row plus a primary accent bar pinned to the first cell. */
+.grid tbody tr:hover > td {
+  background-color: var(--mantine-color-blue-0);
+}
+
+.grid tbody tr:hover > td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--mantine-color-blue-5);
+}
+
+/* ---- Medicine cell ------------------------------------------------------- */
+
+
+
+/* Pack size reads as a metadata pill rather than a second line of body text. */
+.packChip {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--mantine-color-blue-1);
+  background-color: var(--mantine-color-blue-light);
+  color: var(--mantine-color-blue-8);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Long compositions stay on one line so row heights never wobble. */
+.truncate {
+  display: block;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Codes (batch numbers) ---------------------------------------------- */
+
+.codeChip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--mantine-radius-sm);
+  border: 1px solid var(--mantine-color-gray-2);
+  background-color: var(--mantine-color-gray-1);
+  color: var(--mantine-color-gray-8);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+}
+
+.placeholder {
+  color: var(--mantine-color-gray-5);
+}
+
+/* ---- Numeric cells ------------------------------------------------------- */
+
+.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Reuses the same tones as the status badges so colours agree column to column. */
+.quantityLow {
+  color: var(--mantine-color-yellow-8);
+}
+
+.quantityOut {
+  color: var(--mantine-color-red-7);
+}
+
+.expiry {
+  color: var(--mantine-color-gray-8);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.expirySoon {
+  color: var(--mantine-color-orange-8);
+  font-weight: 700;
+}
+
+.expiryPast {
+  color: var(--mantine-color-red-7);
+  font-weight: 700;
+}
+
+/* ---- Status badges ------------------------------------------------------- */
+
+.statusBadge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+
+/* ---- Row actions --------------------------------------------------------- */
+/* Quiet by default, fully lit on hover/keyboard focus so the grid scans as
+   data first and controls second. Coarse pointers (no hover) keep them on. */
+.iconButton {
+  opacity: 0.5;
+  transition: opacity 140ms ease;
+}
+
+.grid tbody tr:hover .iconButton,
+.grid tbody tr:focus-within .iconButton {
+  opacity: 1;
+}
+
+@media (pointer: coarse), (hover: none) {
+  .iconButton {
+    opacity: 1;
+  }
+}
+
+/* ---- Empty & loading states --------------------------------------------- */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 16px;
+}
+
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background-color: var(--mantine-color-gray-1);
+  color: var(--mantine-color-gray-6);
+}
+
+/* ---- Dark scheme --------------------------------------------------------- */
+
+[data-mantine-color-scheme='dark'] .grid thead tr th {
+  background-color: var(--mantine-color-dark-6);
+  color: var(--mantine-color-gray-4);
+  border-bottom-color: var(--mantine-color-blue-8);
+}
+
+[data-mantine-color-scheme='dark'] .grid tbody tr:nth-child(even) {
+  background-color: var(--mantine-color-dark-6);
+}
+
+[data-mantine-color-scheme='dark'] .grid tbody tr > td {
+  border-bottom-color: var(--mantine-color-dark-4);
+}
+
+[data-mantine-color-scheme='dark'] .grid tbody tr:hover > td {
+  background-color: var(--mantine-color-dark-5);
+}
+
+
+[data-mantine-color-scheme='dark'] .codeChip {
+  border-color: var(--mantine-color-dark-4);
+  background-color: var(--mantine-color-dark-5);
+  color: var(--mantine-color-gray-3);
+}
+
+[data-mantine-color-scheme='dark'] .packChip {
+  border-color: var(--mantine-color-blue-9);
+  color: var(--mantine-color-blue-3);
+}
+
+[data-mantine-color-scheme='dark'] .emptyIcon {
+  background-color: var(--mantine-color-dark-5);
+  color: var(--mantine-color-gray-4);
+}
+
+/* ---- Reduced motion ----------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .grid tbody tr,
+  .grid tbody tr > td,
+  .iconButton {
+    transition: none;
+  }
+}

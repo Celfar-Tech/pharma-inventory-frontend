@@ -1,17 +1,21 @@
 // components/Invoices.tsx
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useDebouncedValue } from '@mantine/hooks';
+import { useDebouncedValue, useMediaQuery } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import {
   ActionIcon,
   Alert,
   Autocomplete,
   Badge,
+  Box,
   Button,
   Container,
   Divider,
+  Flex,
   Group,
+  Input,
   Loader,
+  Menu,
   Modal,
   NumberInput,
   Pagination,
@@ -24,11 +28,13 @@ import {
   Table,
   Text,
   TextInput,
+  ThemeIcon,
   Title,
 } from '@mantine/core';
 import {
   IconAlertCircle,
   IconCircleCheck,
+  IconDotsVertical,
   IconDownload,
   IconEye,
   IconInbox,
@@ -44,6 +50,8 @@ import {
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import InvoicePrint from './InvoicePrint';
+import { StatCell } from './StatCell';
+import styles from './invoices.module.css';
 import {
   getBillingInvoice,
   listBillingInvoices,
@@ -57,8 +65,33 @@ import { getMedicineByName, type Medicine } from '../services/medicine';
 import { getBatchNumbersByMedicine, type BatchInfo } from '../services/inventory';
 import { debounce } from '../utils/debounce';
 import { useNavigate } from 'react-router';
+
 const TABLE_COLUMN_COUNT = 9;
 const SKELETON_ROW_COUNT = 6;
+
+/**
+ * Data-grid breakpoint. Below `md` (992px) both the invoice list and the
+ * editable line-item grid switch from a table to stacked cards: cells that
+ * hold controls cannot be shrunk to phone width and still be usable.
+ * `62em` is Mantine's `md` and the same breakpoint the app shell uses for its
+ * sidebar (see App.tsx), so the transitions line up.
+ */
+const COMPACT_LAYOUT_QUERY = '(max-width: 62em)';
+
+/** Phones get full-screen dialogs instead of a cramped 960px-wide one. */
+const MOBILE_MODAL_QUERY = '(max-width: 48em)';
+
+/** Width at which the invoice grid stops compressing and starts panning. */
+const INVOICE_TABLE_MIN_WIDTH = 1020;
+
+/** Width at which the editable line-item grid starts panning. */
+const EDIT_ITEMS_MIN_WIDTH = 900;
+
+/**
+ * Bounds the invoice grid to roughly one viewport of rows and keeps the rest
+ * of the page reachable. `dvh` adapts to mobile browser chrome without JS.
+ */
+const INVOICE_GRID_MAX_HEIGHT = 'min(58dvh, 620px)';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -145,8 +178,163 @@ function getInvoiceGst(row: BillingInvoiceListItem): number {
   );
 }
 
+type InvoiceRowActionProps = {
+  row: BillingInvoiceListItem;
+  onView: (row: BillingInvoiceListItem) => void;
+  onEdit: (row: BillingInvoiceListItem) => void;
+  onPrint: (row: BillingInvoiceListItem) => void;
+};
+
+/**
+ * Desktop grid actions: three compact icon buttons. `data-touch-target` widens
+ * their hit area to 44px on touch devices (see index.css) without making the
+ * desktop row look heavy.
+ */
+function InvoiceIconActions({ row, onView, onEdit, onPrint }: InvoiceRowActionProps) {
+  return (
+    <Group justify="center" gap={4} wrap="nowrap">
+      <ActionIcon
+        data-touch-target
+        variant="subtle"
+        color="blue"
+        radius="md"
+        size={32}
+        onClick={() => onView(row)}
+        aria-label={`View invoice ${row.invoice_number}`}
+        title="View invoice"
+      >
+        <IconEye size={16} />
+      </ActionIcon>
+      <ActionIcon
+        data-touch-target
+        variant="subtle"
+        color="teal"
+        radius="md"
+        size={32}
+        onClick={() => onEdit(row)}
+        aria-label={`Modify invoice ${row.invoice_number}`}
+        title="Modify invoice"
+      >
+        <IconPencil size={16} />
+      </ActionIcon>
+      <ActionIcon
+        data-touch-target
+        variant="subtle"
+        color="violet"
+        radius="md"
+        size={32}
+        onClick={() => onPrint(row)}
+        aria-label={`Print invoice ${row.invoice_number}`}
+        title="Print / download invoice"
+      >
+        <IconPrinter size={16} />
+      </ActionIcon>
+    </Group>
+  );
+}
+
+/**
+ * Card actions: a labelled overflow menu. Three 16px glyphs are an unreliable
+ * thumb target, and the labels double as the affordance.
+ */
+function InvoiceCardActions({ row, onView, onEdit, onPrint }: InvoiceRowActionProps) {
+  return (
+    <Menu
+      position="bottom-end"
+      withinPortal
+      shadow="md"
+      radius="md"
+      width={210}
+      transitionProps={{ transition: 'pop-top-right' }}
+    >
+      <Menu.Target>
+        <ActionIcon
+          variant="light"
+          color="gray"
+          radius="md"
+          size={36}
+          aria-label={`Actions for invoice ${row.invoice_number}`}
+        >
+          <IconDotsVertical size={18} />
+        </ActionIcon>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Label>{row.invoice_number}</Menu.Label>
+        <Menu.Item leftSection={<IconEye size={16} />} onClick={() => onView(row)}>
+          View details
+        </Menu.Item>
+        <Menu.Item leftSection={<IconPencil size={16} />} onClick={() => onEdit(row)}>
+          Modify invoice
+        </Menu.Item>
+        <Menu.Item leftSection={<IconPrinter size={16} />} onClick={() => onPrint(row)}>
+          Print / download
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  );
+}
+
+/** One invoice as a card — the compact-layout counterpart of a grid row. */
+function InvoiceCard({ row, onView, onEdit, onPrint }: InvoiceRowActionProps) {
+  const totalDiscount = Number(row.discount_amount ?? 0) + Number(row.flat_discount ?? 0);
+
+  return (
+    <Paper withBorder radius="md" p="sm" className={styles.rowCard}>
+      <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
+        <Box style={{ minWidth: 0 }}>
+          <Text fw={700} size="sm" className={styles.code}>
+            {row.invoice_number}
+          </Text>
+          <Text size="xs" c="dimmed">
+            {formatInvoiceDate(row.invoice_date)}
+          </Text>
+        </Box>
+        <PaymentBadge paymentType={row.payment_type} />
+      </Group>
+
+      <SimpleGrid cols={2} spacing="xs" verticalSpacing="xs" mt="sm">
+        <StatCell label="Customer" value={row.customer_name || '—'} />
+        <StatCell label="Doctor" value={row.doctor_name || '—'} />
+        <StatCell label="GST" value={money(getInvoiceGst(row))} />
+        <StatCell label="Discount" value={`−${money(totalDiscount)}`} tone="red.7" />
+      </SimpleGrid>
+
+      <Divider my="sm" />
+
+      <Group justify="space-between" align="center" wrap="nowrap" gap="sm">
+        <StatCell label="Amount payable" value={money(row.final_payable)} tone="blue.7" emphasis />
+        <InvoiceCardActions row={row} onView={onView} onEdit={onEdit} onPrint={onPrint} />
+      </Group>
+    </Paper>
+  );
+}
+
+/** Placeholder card shown while the first page of invoices loads. */
+function InvoiceCardSkeleton() {
+  return (
+    <Paper withBorder radius="md" p="sm">
+      <Stack gap="xs">
+        <Skeleton height={16} width="55%" radius="sm" />
+        <Skeleton height={12} width="35%" radius="sm" />
+        <Skeleton height={12} radius="sm" />
+        <Skeleton height={12} width="80%" radius="sm" />
+        <Skeleton height={36} mt={4} radius="sm" />
+      </Stack>
+    </Paper>
+  );
+}
+
 export default function Invoices() {
   const navigate = useNavigate();
+
+  // Two structural switches that CSS alone cannot express: replacing data grids
+  // with card lists, and promoting dialogs to full screen on phones. Everything
+  // else on this page is driven by Mantine style props. Both are resolved
+  // during the first render (client-only app) to avoid a one-frame flash of the
+  // desktop layout on a phone.
+  const isCompactLayout = useMediaQuery(COMPACT_LAYOUT_QUERY, false, { getInitialValueInEffect: false });
+  const isMobileModal = useMediaQuery(MOBILE_MODAL_QUERY, false, { getInitialValueInEffect: false });
+
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch] = useDebouncedValue(searchTerm, 350);
   const [activePage, setActivePage] = useState(1);
@@ -634,63 +822,296 @@ export default function Invoices() {
     }
   };
 
+  /* --------------------------------------------------------------------- *
+   * Editable line-item controls (modify dialog)
+   *
+   * Same approach as the new-invoice page: each field is defined once and
+   * rendered by both the desktop grid row and the mobile card, so the two
+   * layouts cannot drift apart. These are render helpers, not components, so
+   * typing never loses focus when a value changes.
+   * --------------------------------------------------------------------- */
+  const editControlSize = isCompactLayout ? 'sm' : 'xs';
+
+  const renderEditMedicineField = (item: EditableInvoiceItem) => (
+    <Autocomplete
+      size={editControlSize}
+      placeholder="Medicine name"
+      error={submitAttempted && !item.medicineName.trim()}
+      value={item.medicineName}
+      data={(editMedicineSuggestions[item.id] || []).map((med) => ({
+        value: `${med.name}__${med.sku_id}`,
+        label: med.name,
+      }))}
+      onChange={(value) => {
+        const cleanName = value.includes('__') ? value.split('__')[0] : value;
+        handleEditMedicineNameSearch(item.id, cleanName);
+      }}
+      onOptionSubmit={(selectedValue) => {
+        const [selectedName, selectedId] = selectedValue.split('__');
+        handleEditMedicineSelect(item.id, Number(selectedId), selectedName);
+      }}
+      rightSection={editMedicineSearchLoading[item.id] ? <Loader size="xs" /> : null}
+      comboboxProps={{
+        withinPortal: true,
+        width: 'min(320px, calc(100vw - 48px))',
+        position: 'bottom-start',
+        offset: 2,
+      }}
+      ref={(input) => { medicineNameRefs.current[item.id] = input; }}
+      renderOption={({ option }) => {
+        const [name, medId] = option.value.split('__');
+        const med = (editMedicineSuggestions[item.id] || []).find(
+          (m) => String(m.sku_id) === String(medId)
+        );
+        return (
+          <Stack gap={0}>
+            <Text size="sm" fw={600}>
+              {med?.name ?? name}
+            </Text>
+            {med && (
+              <Text size="xs" c="dimmed">
+                {[med.manufacturer_name, med.type, med.pack_size_label]
+                  .filter(Boolean)
+                  .join(' • ')}
+              </Text>
+            )}
+          </Stack>
+        );
+      }}
+    />
+  );
+
+  const renderEditBatchField = (item: EditableInvoiceItem) => (
+    <Autocomplete
+      size={editControlSize}
+      placeholder="Select or enter batch"
+      error={submitAttempted && !item.batch.trim()}
+      data={(editBatchOptions[item.id] || []).map((batch) => batch.batchNumber)}
+      value={item.batch}
+      filter={({ options }) => options}
+      onChange={(value) => updateEditItem(item.id, 'batch', value)}
+      onOptionSubmit={(value) => handleEditBatchSelect(item.id, value)}
+      rightSection={editBatchLoading[item.id] ? <Loader size="xs" /> : null}
+      comboboxProps={{ withinPortal: true, width: 'min(280px, calc(100vw - 48px))' }}
+    />
+  );
+
+  const renderEditExpiryField = (item: EditableInvoiceItem) => (
+    <TextInput
+      size={editControlSize}
+      type="month"
+      value={item.expiryDate}
+      onChange={(event) => updateEditItem(item.id, 'expiryDate', event.currentTarget.value)}
+      error={!!getExpiryError(item.expiryDate) || (submitAttempted && !item.expiryDate)}
+      styles={{ input: { paddingInline: 6 } }}
+    />
+  );
+
+  const renderEditHsnField = (item: EditableInvoiceItem) => (
+    <Select
+      size={editControlSize}
+      placeholder="Select HSN"
+      searchable
+      data={HSN_OPTIONS}
+      value={item.hsnCode}
+      error={submitAttempted && !item.hsnCode.trim()}
+      onChange={(value) => updateEditItem(item.id, 'hsnCode', value ?? '')}
+      comboboxProps={{ withinPortal: true, width: 'min(360px, calc(100vw - 48px))' }}
+    />
+  );
+
+  const renderEditQtyField = (item: EditableInvoiceItem) => (
+    <NumberInput
+      size={editControlSize}
+      min={1}
+      value={item.qty}
+      onChange={(value) => updateEditItem(item.id, 'qty', Number(value) || 0)}
+      error={submitAttempted && item.qty <= 0}
+      hideControls
+    />
+  );
+
+  const renderEditPackField = (item: EditableInvoiceItem) => (
+    <TextInput
+      size={editControlSize}
+      value={item.pack}
+      onChange={(event) => updateEditItem(item.id, 'pack', event.currentTarget.value)}
+      error={submitAttempted && !item.pack.trim()}
+    />
+  );
+
+  const renderEditMrpField = (item: EditableInvoiceItem) => (
+    <NumberInput
+      size={editControlSize}
+      min={0}
+      decimalScale={2}
+      value={item.mrp}
+      onChange={(value) => updateEditItem(item.id, 'mrp', Number(value) || 0)}
+      hideControls
+    />
+  );
+
+  const renderEditSellingField = (item: EditableInvoiceItem) => (
+    <NumberInput
+      size={editControlSize}
+      min={0}
+      decimalScale={2}
+      error={submitAttempted && (item.sellingPrice > item.mrp || item.sellingPrice <= 0)}
+      value={item.sellingPrice}
+      onChange={(value) => updateEditItem(item.id, 'sellingPrice', Number(value) || 0)}
+      hideControls
+    />
+  );
+
+  const renderEditRemoveButton = (item: EditableInvoiceItem) => (
+    <ActionIcon
+      data-touch-target
+      variant="subtle"
+      color="red"
+      radius="md"
+      size={32}
+      onClick={() => removeEditItem(item.id)}
+      disabled={editItems.length <= 1}
+      aria-label={`Remove ${item.medicineName.trim() || 'line item'}`}
+    >
+      <IconTrash size={16} />
+    </ActionIcon>
+  );
+
+  /** Desktop: one row of the editable line-item grid. */
+  const renderEditItemRow = (item: EditableInvoiceItem) => (
+    <Table.Tr key={item.id}>
+      <Table.Td>{renderEditMedicineField(item)}</Table.Td>
+      <Table.Td>{renderEditBatchField(item)}</Table.Td>
+      <Table.Td>{renderEditExpiryField(item)}</Table.Td>
+      <Table.Td>{renderEditHsnField(item)}</Table.Td>
+      <Table.Td ta="right">{renderEditQtyField(item)}</Table.Td>
+      <Table.Td>{renderEditPackField(item)}</Table.Td>
+      <Table.Td ta="right">{renderEditMrpField(item)}</Table.Td>
+      <Table.Td ta="right">{renderEditSellingField(item)}</Table.Td>
+      <Table.Td>{renderEditRemoveButton(item)}</Table.Td>
+    </Table.Tr>
+  );
+
+  /** Mobile/tablet: the same fields stacked as a labelled, tappable card. */
+  const renderEditItemCard = (item: EditableInvoiceItem, index: number) => (
+    <Paper key={item.id} withBorder radius="md" p="sm" className={styles.rowCard}>
+      <Group justify="space-between" align="center" wrap="nowrap" gap="xs" mb="sm">
+        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+          <Badge variant="light" color="blue" radius="sm" size="sm">
+            Item {index + 1}
+          </Badge>
+          <Text size="sm" fw={600} truncate>
+            {item.medicineName.trim() || 'New medicine'}
+          </Text>
+        </Group>
+        {renderEditRemoveButton(item)}
+      </Group>
+
+      <Stack gap="sm">
+        <Input.Wrapper label="Medicine name" required>
+          {renderEditMedicineField(item)}
+        </Input.Wrapper>
+
+        <Input.Wrapper label="Batch number" required>
+          {renderEditBatchField(item)}
+        </Input.Wrapper>
+
+        <SimpleGrid cols={2} spacing="sm">
+          <Input.Wrapper label="Expiry (month)">{renderEditExpiryField(item)}</Input.Wrapper>
+          <Input.Wrapper label="Pack">{renderEditPackField(item)}</Input.Wrapper>
+          <Input.Wrapper label="Quantity">{renderEditQtyField(item)}</Input.Wrapper>
+          <Input.Wrapper label="MRP (₹)">{renderEditMrpField(item)}</Input.Wrapper>
+          <Input.Wrapper label="Selling price (₹)" style={{ gridColumn: '1 / -1' }}>
+            {renderEditSellingField(item)}
+          </Input.Wrapper>
+        </SimpleGrid>
+
+        <Input.Wrapper label="HSN code" required>
+          {renderEditHsnField(item)}
+        </Input.Wrapper>
+      </Stack>
+    </Paper>
+  );
 
   const invoice = viewDetail?.invoice ?? viewInvoice;
   const items = viewDetail?.items ?? [];
 
   return (
-    <Container fluid px={0} py="md">
-      <Stack gap={4} mb="lg">
-        <Title order={2}>Billing Invoices</Title>
+    <Container fluid px={0} py={{ base: 'sm', md: 'md' }}>
+      <Stack gap={4} mb={{ base: 'md', md: 'lg' }}>
+        <Title order={2} fz={{ base: 'h3', md: 'h2' }}>Billing Invoices</Title>
         <Text c="dimmed" size="sm">
           Browse and review every pharmacy invoice you have generated.
         </Text>
       </Stack>
 
-      <Paper withBorder radius="md" p="md" shadow="xs" mb="md">
-        <Group align="flex-end" gap="md" style={{ width: '100%', flexWrap: 'nowrap' }}>
-          <Group grow style={{ flex: 1 }} align="flex-end">
-            <TextInput
-              label="Search"
-              placeholder="Search by invoice number, customer, doctor or payment type..."
-              leftSection={<IconSearch size={16} />}
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.currentTarget.value)}
-            />
+      {/* Toolbar. Phones: one column, full-width controls. From `sm` up the
+          same markup collapses back into a single desktop row. */}
+      <Paper withBorder radius="md" p={{ base: 'sm', sm: 'md' }} shadow="xs" mb={{ base: 'sm', md: 'md' }}>
+        <Flex
+          direction={{ base: 'column', sm: 'row' }}
+          align={{ base: 'stretch', sm: 'flex-end' }}
+          gap="sm"
+        >
+          <TextInput
+            label="Search"
+            placeholder="Search by invoice number, customer, doctor or payment type..."
+            leftSection={<IconSearch size={16} />}
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.currentTarget.value)}
+            w={{ base: '100%', sm: 'auto' }}
+            style={{ flex: 1, minWidth: 0 }}
+          />
 
-          </Group>
-         <Button
-      leftSection={<IconPlus size={16} />}
-      variant="filled"
-      color="blue"
-      h={36}
-      mt={22}
-      onClick={() => navigate('/billing')}
-    >
-      Add Billing Invoice
-    </Button>
-          <ActionIcon
-            variant="light"
-            color="blue"
-            size="lg"
-            mt={22}
-            onClick={() => setRefreshKey((key) => key + 1)}
-            title="Refresh invoices"
+          {/* Action cluster: stacked on phones, side-by-side on tablets+.
+              Both get a 44px tap target while the row is stacked. */}
+          <SimpleGrid
+            cols={{ base: 1, sm: 2 }}
+            spacing="sm"
+            w={{ base: '100%', sm: 'auto' }}
+            style={{ flexShrink: 0 }}
           >
-            <IconRefresh size={18} />
-          </ActionIcon>
-        </Group>
+            <Button
+              leftSection={<IconPlus size={16} />}
+              variant="filled"
+              color="blue"
+              h={{ base: 44, sm: 36 }}
+              w="100%"
+              onClick={() => navigate('/billing')}
+            >
+              Add Billing Invoice
+            </Button>
+            <Button
+              variant="light"
+              color="blue"
+              h={{ base: 44, sm: 36 }}
+              w="100%"
+              leftSection={<IconRefresh size={16} />}
+              onClick={() => setRefreshKey((key) => key + 1)}
+            >
+              Refresh
+            </Button>
+          </SimpleGrid>
+        </Flex>
       </Paper>
 
-      <Paper withBorder radius="md" p="md" shadow="xs">
-        <Group justify="space-between" mb="md">
-          <Title order={4}>Invoices</Title>
-          <Text size="sm" c="dimmed">
+      <Paper withBorder radius="md" p={{ base: 'sm', sm: 'md' }} shadow="xs">
+        <Flex justify="space-between" align="center" gap="sm" wrap="wrap" mb="md">
+          <Group gap="xs" wrap="nowrap">
+            <ThemeIcon variant="light" color="blue" size={32} radius="md">
+              <IconReceipt size={18} />
+            </ThemeIcon>
+            <Title order={4} fz={{ base: 'h5', sm: 'h4' }}>
+              Invoices
+            </Title>
+          </Group>
+          <Badge color={loading ? 'gray' : 'blue'} variant="light" radius="sm" size="md">
             {loading
-              ? 'Loading records…'
+              ? 'Loading…'
               : `${filteredRecords.length} of ${totalRecords} invoice${totalRecords === 1 ? '' : 's'} found`}
-          </Text>
-        </Group>
+          </Badge>
+        </Flex>
 
         {error && (
           <Alert
@@ -705,136 +1126,160 @@ export default function Invoices() {
           </Alert>
         )}
 
-        <ScrollArea h={550} offsetScrollbars type="scroll" scrollbarSize={8}>
-          <Table
-            striped
-            highlightOnHover
-            verticalSpacing="sm"
-            horizontalSpacing="md"
-            withTableBorder
-            stickyHeader
-            style={{ fontSize: '75%' }}
+        {isCompactLayout ? (
+          /* Phones & tablets: one card per invoice — no sideways panning, and
+             the actions become a labelled menu instead of 16px glyphs. */
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+            {loading &&
+              Array.from({ length: 4 }).map((_, index) => <InvoiceCardSkeleton key={index} />)}
+
+            {!loading && !error && filteredRecords.length === 0 && (
+              <Paper withBorder radius="md" p="xl" style={{ gridColumn: '1 / -1' }}>
+                <Stack align="center" gap={4}>
+                  <IconInbox size={28} color="var(--mantine-color-gray-5)" />
+                  <Text c="dimmed" size="sm">
+                    No invoices match your current filters.
+                  </Text>
+                </Stack>
+              </Paper>
+            )}
+
+            {!loading &&
+              !error &&
+              filteredRecords.map((row) => (
+                <InvoiceCard
+                  key={row.invoice_number}
+                  row={row}
+                  onView={openView}
+                  onEdit={openEdit}
+                  onPrint={openPrint}
+                />
+              ))}
+          </SimpleGrid>
+        ) : (
+          /* Desktop: the grid pans inside its own container and is capped to
+             about one viewport of rows, with a sticky header. */
+          <Table.ScrollContainer
+            minWidth={INVOICE_TABLE_MIN_WIDTH}
+            maxHeight={INVOICE_GRID_MAX_HEIGHT}
+            type="native"
+            className={styles.scrollRegion}
           >
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Invoice No.</Table.Th>
-                <Table.Th>Date</Table.Th>
-                <Table.Th>Customer</Table.Th>
-                <Table.Th>Doctor</Table.Th>
-                <Table.Th>Payment</Table.Th>
-                <Table.Th ta="right">GST</Table.Th>
-                <Table.Th ta="right">Total Discount</Table.Th>
-                <Table.Th ta="right">Amount</Table.Th>
-                <Table.Th ta="center">Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {loading &&
-                Array.from({ length: SKELETON_ROW_COUNT }).map((_, rowIndex) => (
-                  <Table.Tr key={`skeleton-${rowIndex}`}>
-                    {Array.from({ length: TABLE_COLUMN_COUNT }).map((__, colIndex) => (
-                      <Table.Td key={colIndex}>
-                        <Skeleton height={16} radius="sm" />
-                      </Table.Td>
-                    ))}
-                  </Table.Tr>
-                ))}
-
-              {!loading && !error && filteredRecords.length === 0 && (
+            <Table
+              striped
+              highlightOnHover
+              verticalSpacing="md"
+              horizontalSpacing="md"
+              withTableBorder
+              stickyHeader
+              fz="xs"
+            >
+              <Table.Thead>
                 <Table.Tr>
-                  <Table.Td colSpan={TABLE_COLUMN_COUNT}>
-                    <Stack align="center" gap={4} py="xl">
-                      <IconInbox size={28} color="var(--mantine-color-gray-5)" />
-                      <Text c="dimmed" size="sm">
-                        No invoices match your current filters.
-                      </Text>
-                    </Stack>
-                  </Table.Td>
+                  <Table.Th>Invoice No.</Table.Th>
+                  <Table.Th>Date</Table.Th>
+                  <Table.Th>Customer</Table.Th>
+                  <Table.Th>Doctor</Table.Th>
+                  <Table.Th>Payment</Table.Th>
+                  <Table.Th ta="right">GST</Table.Th>
+                  <Table.Th ta="right">Total Discount</Table.Th>
+                  <Table.Th ta="right">Amount</Table.Th>
+                  <Table.Th ta="center">Actions</Table.Th>
                 </Table.Tr>
-              )}
+              </Table.Thead>
+              <Table.Tbody>
+                {loading &&
+                  Array.from({ length: SKELETON_ROW_COUNT }).map((_, rowIndex) => (
+                    <Table.Tr key={`skeleton-${rowIndex}`}>
+                      {Array.from({ length: TABLE_COLUMN_COUNT }).map((__, colIndex) => (
+                        <Table.Td key={colIndex}>
+                          <Skeleton height={16} radius="sm" />
+                        </Table.Td>
+                      ))}
+                    </Table.Tr>
+                  ))}
 
-              {!loading &&
-                !error &&
-                filteredRecords.map((row) => (
-                  <Table.Tr key={row.invoice_number}>
-                    <Table.Td>
-                      <b>{row.invoice_number}</b>
-                    </Table.Td>
-                    <Table.Td>{formatInvoiceDate(row.invoice_date)}</Table.Td>
-                    <Table.Td>{row.customer_name || '—'}</Table.Td>
-                    <Table.Td>{row.doctor_name || '—'}</Table.Td>
-                    <Table.Td>
-                      <PaymentBadge paymentType={row.payment_type} />
-                    </Table.Td>
-                    <Table.Td ta="right" fw={500}>
-                      {money(getInvoiceGst(row))}
-                    </Table.Td>
-                    <Table.Td ta="right" c="red.7" fw={500}>
-                      −{money(Number(row.discount_amount ?? 0) + Number(row.flat_discount ?? 0))}
-                    </Table.Td>
-                   
-                    <Table.Td ta="right" fw={600}>
-                      {money(row.final_payable)}
-                    </Table.Td>
-                    <Table.Td>
-                      <Group justify="center" gap={4} wrap="nowrap">
-                        <ActionIcon
-                          variant="subtle"
-                          color="blue"
-                          size="sm"
-                          onClick={() => openView(row)}
-                          title="View invoice"
-                        >
-                          <IconEye style={{ width: 16, height: 16 }} />
-                        </ActionIcon>
-                        <ActionIcon
-                          variant="subtle"
-                          color="teal"
-                          size="sm"
-                          onClick={() => openEdit(row)}
-                          title="Modify invoice"
-                        >
-                          <IconPencil style={{ width: 16, height: 16 }} />
-                        </ActionIcon>
-                        <ActionIcon
-                          variant="subtle"
-                          color="violet"
-                          size="sm"
-                          onClick={() => openPrint(row)}
-                          title="Print / download invoice"
-                        >
-                          <IconPrinter style={{ width: 16, height: 16 }} />
-                        </ActionIcon>
-                      </Group>
+                {!loading && !error && filteredRecords.length === 0 && (
+                  <Table.Tr>
+                    <Table.Td colSpan={TABLE_COLUMN_COUNT}>
+                      <Stack align="center" gap={4} py="xl">
+                        <IconInbox size={28} color="var(--mantine-color-gray-5)" />
+                        <Text c="dimmed" size="sm">
+                          No invoices match your current filters.
+                        </Text>
+                      </Stack>
                     </Table.Td>
                   </Table.Tr>
-                ))}
-            </Table.Tbody>
-          </Table>
-        </ScrollArea>
+                )}
 
-        <Group justify="space-between" mt="md">
+                {!loading &&
+                  !error &&
+                  filteredRecords.map((row) => (
+                    <Table.Tr key={row.invoice_number}>
+                      <Table.Td>
+                        <b className={styles.code}>{row.invoice_number}</b>
+                      </Table.Td>
+                      <Table.Td>{formatInvoiceDate(row.invoice_date)}</Table.Td>
+                      <Table.Td>{row.customer_name || '—'}</Table.Td>
+                      <Table.Td>{row.doctor_name || '—'}</Table.Td>
+                      <Table.Td>
+                        <PaymentBadge paymentType={row.payment_type} />
+                      </Table.Td>
+                      <Table.Td ta="right" fw={500} className={styles.money}>
+                        {money(getInvoiceGst(row))}
+                      </Table.Td>
+                      <Table.Td ta="right" c="red.7" fw={500} className={styles.money}>
+                        −{money(Number(row.discount_amount ?? 0) + Number(row.flat_discount ?? 0))}
+                      </Table.Td>
+                      <Table.Td ta="right" fw={600} className={styles.money}>
+                        {money(row.final_payable)}
+                      </Table.Td>
+                      <Table.Td>
+                        <InvoiceIconActions
+                          row={row}
+                          onView={openView}
+                          onEdit={openEdit}
+                          onPrint={openPrint}
+                        />
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
+
+        <Flex
+          direction={{ base: 'column', sm: 'row' }}
+          justify="space-between"
+          align={{ base: 'stretch', sm: 'center' }}
+          gap="sm"
+          mt="md"
+        >
           <Select
             value={String(pageSize)}
             onChange={(value) => setPageSize(Number(value) || 10)}
             data={['5', '10', '20', '50']}
             leftSection={<IconListDetails size={16} />}
-            w={90}
+            w={{ base: '100%', sm: 96 }}
             size="sm"
             radius="md"
             allowDeselect={false}
+            aria-label="Rows per page"
           />
           {totalPages > 1 && (
+            /* Narrower pagination on phones so it never forces a sideways scroll. */
             <Pagination
               total={totalPages}
               value={activePage}
               onChange={setActivePage}
               size="sm"
               boundaries={1}
-              siblings={1}
+              siblings={isCompactLayout ? 0 : 1}
+              withEdges={!isCompactLayout}
             />
           )}
-        </Group>
+        </Flex>
       </Paper>
 
       {/* ------------------------------ View modal ------------------------------ */}
@@ -844,11 +1289,15 @@ export default function Invoices() {
         title={
           <Group gap="xs">
             <IconReceipt size={18} />
-            <Text fw={700}>{viewInvoice?.invoice_number}</Text>
+            <Text fw={700} lineClamp={1}>{viewInvoice?.invoice_number}</Text>
           </Group>
         }
+        // Phones get the full screen — a wide table has no chance of being
+        // readable inside a 360px dialog.
+        fullScreen={isMobileModal}
         size={960}
         centered
+        padding={isMobileModal ? 'md' : 'lg'}
         overlayProps={{ backgroundOpacity: 0.55, blur: 3 }}
       >
         {viewLoading && (
@@ -911,7 +1360,11 @@ export default function Invoices() {
 
             <Divider />
 
-            <ScrollArea offsetScrollbars scrollbarSize={8}>
+            <Table.ScrollContainer
+              minWidth={EDIT_ITEMS_MIN_WIDTH}
+              type="native"
+              className={styles.scrollRegion}
+            >
               <Table striped withTableBorder verticalSpacing="xs" horizontalSpacing="xs" fz="xs">
                 <Table.Thead>
                   <Table.Tr>
@@ -955,11 +1408,11 @@ export default function Invoices() {
                   ))}
                 </Table.Tbody>
               </Table>
-            </ScrollArea>
+            </Table.ScrollContainer>
 
             <Divider />
 
-            <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="lg" verticalSpacing="md">
+            <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }} spacing={{ base: 'md', lg: 'lg' }} verticalSpacing="md">
               <div>
                 <Text size="xs" c="dimmed" fw={500} tt="uppercase" lts={0.5}>
                   Total quantity
@@ -1017,11 +1470,17 @@ export default function Invoices() {
           </Stack>
         )}
 
-        <Group justify="flex-end" mt="lg">
-          <Button variant="light" color="gray" onClick={() => setViewInvoice(null)}>
+        <Flex direction={{ base: 'column-reverse', sm: 'row' }} justify="flex-end" gap="sm" mt="lg">
+          <Button
+            variant="light"
+            color="gray"
+            onClick={() => setViewInvoice(null)}
+            h={{ base: 44, sm: 36 }}
+            w={{ base: '100%', sm: 'auto' }}
+          >
             Close
           </Button>
-        </Group>
+        </Flex>
       </Modal>
 
       {/* ------------------------------ Edit modal ------------------------------ */}
@@ -1029,13 +1488,17 @@ export default function Invoices() {
         opened={!!editInvoice}
         onClose={() => setEditInvoice(null)}
         title={
-          <Group gap="xs">
+          <Group gap="xs" wrap="nowrap">
             <IconPencil size={18} />
-            <Text fw={700}>Modify {editInvoice?.invoice_number}</Text>
+            <Text fw={700} lineClamp={1}>Modify {editInvoice?.invoice_number}</Text>
           </Group>
         }
+        // The editable grid is unusable inside a phone-sized dialog, so the
+        // dialog takes the whole screen and the fields stack into cards.
+        fullScreen={isMobileModal}
         size={960}
         centered
+        padding={isMobileModal ? 'md' : 'lg'}
         overlayProps={{ backgroundOpacity: 0.55, blur: 3 }}
       >
         <Stack gap="md">
@@ -1099,12 +1562,18 @@ export default function Invoices() {
 
           <Divider />
 
-          <Group justify="space-between">
+          <Flex justify="space-between" align="center" gap="sm" wrap="wrap">
             <Text fw={600}>Medicine items</Text>
-            <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={addEditItem}>
+            <Button
+              variant="light"
+              leftSection={<IconPlus size={14} />}
+              onClick={addEditItem}
+              h={{ base: 44, sm: 36 }}
+              w={{ base: '100%', sm: 'auto' }}
+            >
               Add medicine
             </Button>
-          </Group>
+          </Flex>
 
           {editItemsLoading && (
             <Stack gap="xs">
@@ -1113,9 +1582,20 @@ export default function Invoices() {
             </Stack>
           )}
 
-          {!editItemsLoading && (
-            <ScrollArea offsetScrollbars scrollbarSize={8}>
-              <Table striped withTableBorder verticalSpacing="xs" horizontalSpacing="xs" fz="xs" miw={900}>
+          {!editItemsLoading && isCompactLayout && (
+            /* Phones & tablets: one card per line item, all fields tappable. */
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+              {editItems.map((item, index) => renderEditItemCard(item, index))}
+            </SimpleGrid>
+          )}
+
+          {!editItemsLoading && !isCompactLayout && (
+            <Table.ScrollContainer
+              minWidth={EDIT_ITEMS_MIN_WIDTH}
+              type="native"
+              className={styles.scrollRegion}
+            >
+              <Table striped withTableBorder verticalSpacing="xs" horizontalSpacing="xs" fz="xs">
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th>Medicine</Table.Th>
@@ -1130,158 +1610,18 @@ export default function Invoices() {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {editItems.map((item) => (
-                    <Table.Tr key={item.id}>
-                      <Table.Td>
-                        <Autocomplete
-                          size="xs"
-                          placeholder="Medicine name"
-                          error={submitAttempted && !item.medicineName.trim()}
-                          value={item.medicineName}
-                          data={(editMedicineSuggestions[item.id] || []).map((med) => ({
-                            value: `${med.name}__${med.sku_id}`,
-                            label: med.name,
-                          }))}
-                          onChange={(value) => {
-                            const cleanName = value.includes('__') ? value.split('__')[0] : value;
-                            handleEditMedicineNameSearch(item.id, cleanName);
-                          }}
-                          onOptionSubmit={(selectedValue) => {
-                            const [selectedName, selectedId] = selectedValue.split('__');
-                            handleEditMedicineSelect(item.id, Number(selectedId), selectedName);
-                          }}
-                          rightSection={editMedicineSearchLoading[item.id] ? <Loader size="xs" /> : null}
-                          comboboxProps={{ withinPortal: true, width: 300, position: 'bottom-start', offset: 2 }}
-                          ref={(input) => { medicineNameRefs.current[item.id] = input; }}
-                          renderOption={({ option }) => {
-                            const [name, medId] = option.value.split('__');
-                            const med = (editMedicineSuggestions[item.id] || []).find(
-                              (m) => String(m.sku_id) === String(medId)
-                            );
-                            return (
-                              <Stack gap={0}>
-                                <Text size="sm" fw={600}>
-                                  {med?.name ?? name}
-                                </Text>
-                                {med && (
-                                  <Text size="xs" c="dimmed">
-                                    {[med.manufacturer_name, med.type, med.pack_size_label]
-                                      .filter(Boolean)
-                                      .join(' • ')}
-                                  </Text>
-                                )}
-                              </Stack>
-                            );
-                          }}
-                        />
-                      </Table.Td>
-                      <Table.Td>
-                        <Autocomplete
-                          size="xs"
-                          placeholder="Select or enter batch"
-                          error={submitAttempted && !item.batch.trim()}
-                          data={(editBatchOptions[item.id] || []).map((batch) => batch.batchNumber)}
-                          value={item.batch}
-                          filter={({ options }) => options}
-                          onChange={(value) => updateEditItem(item.id, 'batch', value)}
-                          onOptionSubmit={(value) => handleEditBatchSelect(item.id, value)}
-                          rightSection={editBatchLoading[item.id] ? <Loader size="xs" /> : null}
-                          comboboxProps={{ withinPortal: true }}
-                        />
-                      </Table.Td>
-                      <Table.Td>
-                        <Table.Td><TextInput size="xs" type="month" value={item.expiryDate} onChange={(event) => updateEditItem(item.id, 'expiryDate', event.currentTarget.value)} error={!!getExpiryError(item.expiryDate) || (submitAttempted && !item.expiryDate)} styles={{ input: { paddingInline: 6 } }} /></Table.Td>
-                      </Table.Td>
-                      <Table.Td>
-                        <Select
-                          size="xs"
-                          placeholder="Select HSN"
-                          searchable
-                          data={HSN_OPTIONS}
-                          value={item.hsnCode}
-                          error={submitAttempted && !item.hsnCode.trim()}
-                          onChange={(value) => updateEditItem(item.id, 'hsnCode', value ?? '')}
-                        />
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        <NumberInput
-                          size="xs"
-                          min={1}
-                          value={item.qty}
-                          onChange={(value) => updateEditItem(item.id, 'qty', Number(value) || 0)}
-                          hideControls
-                        />
-                      </Table.Td>
-                      <Table.Td>
-                        <TextInput
-                          size="xs"
-                          value={item.pack}
-                          onChange={(event) => updateEditItem(item.id, 'pack', event.currentTarget.value)}
-                        />
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        <NumberInput
-                          size="xs"
-                          min={0}
-                          decimalScale={2}
-                          value={item.mrp}
-                          onChange={(value) => updateEditItem(item.id, 'mrp', Number(value) || 0)}
-                          hideControls
-                        />
-                      </Table.Td>
-                      <Table.Td ta="right">
-                        <NumberInput
-                          size="xs"
-                          min={0}
-                          decimalScale={2}
-                          error={submitAttempted && (item.sellingPrice > item.mrp || item.sellingPrice <= 0)}
-                          value={item.sellingPrice}
-                          onChange={(value) => updateEditItem(item.id, 'sellingPrice', Number(value) || 0)}
-                          hideControls
-                        />
-                      </Table.Td>
-                      <Table.Td>
-                        <ActionIcon
-                          variant="subtle"
-                          color="red"
-                          size="sm"
-                          onClick={() => removeEditItem(item.id)}
-                          disabled={editItems.length <= 1}
-                          title="Remove item"
-                        >
-                          <IconTrash style={{ width: 16, height: 16 }} />
-                        </ActionIcon>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
+                  {editItems.map((item) => renderEditItemRow(item))}
                 </Table.Tbody>
               </Table>
-            </ScrollArea>
+            </Table.ScrollContainer>
           )}
 
           <Divider />
 
-          <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="md" verticalSpacing="sm" >
-            <div>
-              <Text size="xs" c="dimmed">Total quantity</Text>
-              <Text fw={600} size="sm" lh="xs" style={{ minHeight: 36, display: 'flex', alignItems: 'center' }}>
-                {editTotals.totalQuantity}
-              </Text>
-            </div>
-
-            <div>
-              <Text size="xs" c="dimmed">Gross Amount</Text>
-              <Text fw={600} size="sm" lh="xs" style={{ minHeight: 36, display: 'flex', alignItems: 'center' }}>
-                {money(editTotals.grossAmount)}
-              </Text>
-            </div>
-
-            <div>
-              <Text size="xs" c="dimmed">Item Discount</Text>
-              <Text fw={600} size="sm" lh="xs" style={{ minHeight: 36, display: 'flex', alignItems: 'center' }}>
-                {money(editTotals.discount ?? 0)}
-              </Text>
-            </div>
+          <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }} spacing="md" verticalSpacing="sm">
+            <StatCell label="Total quantity" value={String(editTotals.totalQuantity)} />
+            <StatCell label="Gross amount" value={money(editTotals.grossAmount)} />
+            <StatCell label="Item discount" value={money(editTotals.discount ?? 0)} />
 
             {/* Compact & Seamless Input Variant */}
             <NumberInput
@@ -1300,30 +1640,45 @@ export default function Invoices() {
               }}
             />
 
-            <div>
-              <Text size="xs" c="dimmed">Total Discount</Text>
-              <Text fw={600} size="sm" lh="xs" style={{ minHeight: 36, display: 'flex', alignItems: 'center' }}>
-                {money((Number(editTotals.discount) || 0) + (Number(editForm.flatDiscount) || 0))}
-              </Text>
-            </div>
-
-            <div>
-              <Text size="xs" c="dimmed">Final payable</Text>
-              <Text fw={700} size="sm" lh="xs" c="blue" style={{ minHeight: 36, display: 'flex', alignItems: 'center' }}>
-                {money(editTotals.payable)}
-              </Text>
-            </div>
+            <StatCell
+              label="Total discount"
+              value={money((Number(editTotals.discount) || 0) + (Number(editForm.flatDiscount) || 0))}
+              tone="red.7"
+            />
+            <StatCell
+              label="Final payable"
+              value={money(editTotals.payable)}
+              tone="blue.7"
+              emphasis
+            />
           </SimpleGrid>
         </Stack>
 
-        <Group justify="flex-end" gap="sm" mt="lg">
-          <Button variant="light" color="gray" onClick={() => setEditInvoice(null)}>
-            Cancel
-          </Button>
-          <Button color="blue" onClick={handleSaveEdit} loading={editSaving} disabled={editSaving || editItemsLoading}>
-            Save changes
-          </Button>
-        </Group>
+        {/* Sticky footer: on a phone the dialog scrolls, so Save changes stays
+            within thumb reach instead of sitting below 9 fields. */}
+        <Box className="app-sticky-actions is-flush">
+          <Flex direction={{ base: 'column-reverse', sm: 'row' }} justify="flex-end" gap="sm">
+            <Button
+              variant="light"
+              color="gray"
+              onClick={() => setEditInvoice(null)}
+              h={{ base: 44, sm: 36 }}
+              w={{ base: '100%', sm: 'auto' }}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="blue"
+              onClick={handleSaveEdit}
+              loading={editSaving}
+              disabled={editSaving || editItemsLoading}
+              h={{ base: 44, sm: 36 }}
+              w={{ base: '100%', sm: 'auto' }}
+            >
+              Save changes
+            </Button>
+          </Flex>
+        </Box>
       </Modal>
 
       {/* ------------------------------ Print / PDF preview modal ------------------------------ */}
@@ -1331,13 +1686,15 @@ export default function Invoices() {
         opened={!!printInvoice}
         onClose={() => setPrintInvoice(null)}
         title={
-          <Group gap="xs">
+          <Group gap="xs" wrap="nowrap">
             <IconPrinter size={18} />
-            <Text fw={700}>Print preview · {printInvoice?.invoice_number}</Text>
+            <Text fw={700} lineClamp={1}>Print preview · {printInvoice?.invoice_number}</Text>
           </Group>
         }
+        fullScreen={isMobileModal}
         size={980}
         centered
+        padding={isMobileModal ? 'md' : 'lg'}
         overlayProps={{ backgroundOpacity: 0.55, blur: 3 }}
       >
         {printLoading && (
@@ -1355,7 +1712,14 @@ export default function Invoices() {
         )}
 
         {!printLoading && !printError && printDetail && (
-          <ScrollArea h={600} offsetScrollbars scrollbarSize={8}>
+          /* The preview keeps the real A4 sheet at 1:1 (so the PDF matches the
+             screen) and pans inside this viewport on a phone. */
+          <ScrollArea
+            h={{ base: '62dvh', md: 600 }}
+            offsetScrollbars
+            scrollbarSize={8}
+            className={styles.previewViewport}
+          >
             <div style={{ background: '#e2e8f0', padding: 16, borderRadius: 8 }}>
               <div style={{ boxShadow: '0 8px 30px rgba(15, 23, 42, 0.18)' }}>
                 <InvoicePrint ref={printRef} invoice={printDetail.invoice} items={printDetail.items} />
@@ -1364,8 +1728,14 @@ export default function Invoices() {
           </ScrollArea>
         )}
 
-        <Group justify="flex-end" gap="sm" mt="lg">
-          <Button variant="light" color="gray" onClick={() => setPrintInvoice(null)}>
+        <Flex direction={{ base: 'column-reverse', sm: 'row' }} justify="flex-end" gap="sm" mt="lg">
+          <Button
+            variant="light"
+            color="gray"
+            onClick={() => setPrintInvoice(null)}
+            h={{ base: 44, sm: 36 }}
+            w={{ base: '100%', sm: 'auto' }}
+          >
             Close
           </Button>
           <Button
@@ -1374,6 +1744,8 @@ export default function Invoices() {
             onClick={handleDownloadPdf}
             loading={pdfLoading}
             disabled={pdfLoading || !printDetail || printLoading}
+            h={{ base: 44, sm: 36 }}
+            w={{ base: '100%', sm: 'auto' }}
           >
             Download PDF
           </Button>
@@ -1382,10 +1754,12 @@ export default function Invoices() {
             leftSection={<IconPrinter size={16} />}
             onClick={handlePrintInvoice}
             disabled={!printDetail || printLoading}
+            h={{ base: 44, sm: 36 }}
+            w={{ base: '100%', sm: 'auto' }}
           >
             Print
           </Button>
-        </Group>
+        </Flex>
       </Modal>
     </Container>
   );

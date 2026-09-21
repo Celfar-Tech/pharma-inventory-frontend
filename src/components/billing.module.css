@@ -1,0 +1,37 @@
+/* ---------------------------------------------------------------------------
+ * Billing (new invoice) — scoped presentation layer.
+ *
+ * Layout and responsiveness come from Mantine breakpoint props and the app's
+ * shared CSS foundation (index.css). This file only paints the pieces Mantine
+ * has no prop for: local scroll polish, and the mobile line-item card.
+ * Everything resolves through Mantine theme variables so it tracks the theme.
+ * ------------------------------------------------------------------------- */
+
+/* ---- Local scroll containers -------------------------------------------- */
+/* Wide grids and the tax table pan *inside* themselves, so the document never
+   gains a horizontal scrollbar. `overscroll-behavior` stops a pan inside the
+   table from rubber-banding the whole page on touch devices. */
+.scrollX,
+.scrollRegion {
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.scrollRegion {
+  overscroll-behavior-y: contain;
+}
+
+/* ---- Mobile line-item card ---------------------------------------------- */
+/* Below `md` each line item becomes a card; a slim accent bar keeps the card
+   visually tied to the "Medicine items" section header. */
+.itemCard {
+  border-left: 3px solid var(--mantine-color-blue-4);
+}
+
+/* ---- Money --------------------------------------------------------------- */
+/* Tabular figures stop amounts from jittering as digits change. */
+.moneyValue {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
