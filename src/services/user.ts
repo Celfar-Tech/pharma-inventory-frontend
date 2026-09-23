@@ -1,5 +1,5 @@
 // User authentication and account management API calls
-import { API_BASE_URL, getHeaders, toApiError } from './apiClient';
+import { API_BASE_URL, getHeaders, toApiError, toResponseError } from './apiClient';
 
 export interface UserProfile {
   id: string;
@@ -163,6 +163,12 @@ export const finalizeRegistration = async (userData: any) => {
   }
 };
 
+/**
+ * Reads the signed-in user from the session cookie.
+ *
+ * Throws an `ApiError` with `status === 401` when there is no session yet, which
+ * is the normal state for a visitor who has not signed in.
+ */
 export const getProfile = async (): Promise<UserProfile> => {
   try {
     const response = await fetch(`${API_BASE_URL}/user/profile`, {
@@ -171,8 +177,8 @@ export const getProfile = async (): Promise<UserProfile> => {
       credentials: 'include',
     });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Failed to load profile');
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw toResponseError(response, data, 'Failed to load profile');
     return data.user as UserProfile;
   } catch (error) {
     throw toApiError(error, 'Failed to load profile');
@@ -188,9 +194,9 @@ export const loginUser = async (data: LoginPayload): Promise<AuthResponse> => {
       body: JSON.stringify(data),
     });
 
-    const body = await response.json();
+    const body = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(body.error || 'Login failed');
+      throw toResponseError(response, body, 'Login failed');
     }
     return body;
   } catch (error) {

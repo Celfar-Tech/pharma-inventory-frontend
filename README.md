@@ -30,7 +30,12 @@ npm run build
 npm run preview
 ```
 
-The app expects the backend API at the URL set via the `VITE_API_URL` environment variable (see `src/services/apiClient.ts`). The dev server is available at `http://129.121.135.236:5173/` by default.
+The app talks to the API host configured through the `VITE_API_URL` environment variable (see `src/services/apiClient.ts`):
+
+- **Local development** (`npm run dev`) calls `/api`, which the Vite dev server proxies to `VITE_DEV_API_TARGET` (`https://dev.api.pharma-connect.in`, set in `.env.development`). Keeping those calls same-origin with `http://localhost:5173` is what allows the API's httpOnly session cookie to be stored and replayed — a direct cross-site call is rejected with `401 Unauthorized: No session cookie provided` unless the API marks the cookie `SameSite=None; Secure`.
+- **Production builds** (`npm run build`) fall back to `https://api.pharma-connect.in`.
+
+To point either mode at a different host, create a git-ignored `.env.local` (for local overrides) or `.env.production` (for release overrides). The dev server is available at `http://localhost:5173/` by default.
 
 ## Features
 
