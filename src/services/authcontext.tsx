@@ -10,6 +10,7 @@ import type {
   LoginPayload,
   RegisterPayload,
 } from './user'
+import { ApiError } from './apiClient';
 import { AuthContext, type AuthStatus } from './useAuth';
 
 
@@ -33,11 +34,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setUser(profile);
           setStatus('authenticated');
         }
-      } catch {
-        if (active) {
-          setUser(null);
-          setStatus('unauthenticated');
+      } catch (error) {
+        if (!active) return;
+
+        // A 401 here is the normal "no session cookie yet" state for a visitor
+        // who is not signed in, so it is not surfaced as an application error.
+        // Anything else (network failure, 5xx) is logged because it usually
+        // means the API is unreachable rather than unauthenticated.
+        if (!(error instanceof ApiError && error.status === 401)) {
+          console.warn('Could not restore the session from the API:', error);
         }
+
+        setUser(null);
+        setStatus('unauthenticated');
       }
     })();
 
