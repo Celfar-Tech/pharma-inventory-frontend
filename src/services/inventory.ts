@@ -36,6 +36,8 @@ export interface InventoryRecord {
   stock_alert_threshold: number;
   expiry_date: string | null;
   user_name: string | null;
+  /** Optional: not always returned by the list endpoint. */
+  image_url?: string | null;
   insert_date: string;
   update_date: string;
 }
