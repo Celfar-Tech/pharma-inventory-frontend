@@ -27,6 +27,7 @@ import {
   IconCoins,
   IconCalendarEvent,
   IconInfoCircle,
+  IconPhotoOff,
   IconX
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
@@ -63,6 +64,31 @@ const normalizeMedicineType = (value?: string | null): string => {
   );
   // Keep unknown values as-is so no data is silently lost.
   return match ?? trimmed;
+};
+
+/**
+ * Converts whatever the backend returns for `expiry_date` into the
+ * `YYYY-MM-DD` string an `<input type="date">` expects.
+ *
+ * Deliberately does not use `new Date(value).toISOString()`: that converts to
+ * UTC, so a local-midnight timestamp in a positive-offset timezone (IST, +5:30)
+ * reads back as the previous day and editing a batch silently shifts its expiry.
+ */
+const toDateInputValue = (value?: string | number | null): string => {
+  if (value === null || value === undefined || value === '') return '';
+  const raw = String(value).trim();
+
+  // Already a calendar date (with or without a time part) — trust it verbatim.
+  const calendarDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (calendarDate) return calendarDate[1];
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return '';
+
+  // Fall back to local calendar parts rather than the UTC ISO date.
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${parsed.getFullYear()}-${month}-${day}`;
 };
 
 interface InventoryModalFormProps {
@@ -165,7 +191,7 @@ export default function InventoryModalForm({
           const response = await apiFunction(name);
           setSuggestions(response.data || []);
           setError(null);
-        } catch (error) {
+        } catch {
           setSuggestions([]);
           setError('Failed to fetch data. Please try again.');
         } finally {
@@ -174,6 +200,10 @@ export default function InventoryModalForm({
       }, 1000),
       [apiFunction]
     );
+
+    // Drop any pending timer when the searcher is replaced or unmounted, so a
+    // lookup cannot resolve into a form that has already closed.
+    useEffect(() => () => debouncedSearch.cancel(), [debouncedSearch]);
 
     return debouncedSearch;
   };
@@ -232,41 +262,134 @@ export default function InventoryModalForm({
     setManufacturerLoading(false);
   };
 
-  // --- LIFECYCLE & SUBMISSION ---
-  useEffect(() => {
-    if (opened) {
-      if (initialData) {
-        setMedicineName(initialData.name || '');
-        setManufacturer(initialData.manufacturername || initialData.manufacturer_name || '');
-        setMedicineType(normalizeMedicineType(initialData.type));
-        setPackSize(initialData.pack_size_label || '');
-        setComposition1(initialData.composition1 || '');
-        setImageUrl(initialData.image_url || '');
-        setMrp(initialData.mrp || 0);
-        setBatchNumber(initialData.batch_number || '');
-        setshelfrackinfo(initialData.shelf_rack_info || '');
-        setQuantity(initialData.stock_quantity || 0);
-        setPurchasePrice(initialData.purchase_price || 0);
-        setSellingPrice(initialData.selling_price || 0);
-        setAlertThreshold(initialData.stock_alert_threshold || 6);
-        setExpiryDate(initialData.expiry_date ? new Date(initialData.expiry_date).toISOString().split('T')[0] : '');
-        setOriginalIdentity({
-          name: initialData.name || '',
-          manufacturer: initialData.manufacturername || initialData.manufacturer_name || '',
-          packsize: (initialData.pack_size_label ?? '').toString(),
-          composition1: initialData.composition1 || '',
-          batchNumber: initialData.batch_number,
+  /**
+   * Restores every field to the "new stock item" defaults.
+   *
+   * Memoized because the hydration effect below calls it: an unstable identity
+   * would make that effect re-run on every render and overwrite whatever the
+   * user had typed.
+   */
+  const resetFormFields = useCallback(() => {
+    setMedicineName('');
+    setComposition1('');
+    setManufacturer('');
+    setQuantity(1);
+    setBatchNumber('');
+    setshelfrackinfo('');
+    setAlertThreshold(6);
+    setPackSize('');
+    setImageUrl('');
+    setPurchasePrice(0);
+    setSellingPrice(0);
+    setMrp(0);
+    setExpiryDate('');
+    setMedicineType('Allopathy');
+    setIsSubmitted(false);
+    setWarningModalOpened(false);
+    setSuggestions([]);
+    setManufacturerSuggestions([]);
+    setSelectedMedicine(null);
+    setConfirmedManufacturer('');
+  }, []);
 
-        });
-        const initialMfg = initialData.manufacturername || initialData.manufacturer_name || '';
-        setManufacturer(initialMfg);
-        setConfirmedManufacturer(initialMfg); // Set this here
-      } else {
-        setOriginalIdentity(null);
-        resetFormFields();
-      }
+  // --- LIFECYCLE & SUBMISSION ---
+  /**
+   * Hydrates the form for the record the modal is showing, then fills in the
+   * one field the inventory payload cannot supply.
+   *
+   * Why this is deliberately one effect and not two: both steps write the same
+   * form state, and they must happen in a fixed order — clear the preview,
+   * then (edit mode only) re-resolve it from the medicine catalogue, because
+   * `/inventory/get-inventory` returns stock columns only and carries no
+   * `image_url` while images live on the catalogue. Two effects with identical
+   * deps made that order implicit in their declaration order, so correctness
+   * depended on nobody ever reordering the file, and left two writers racing
+   * to own `imageUrl`. One effect, one cancellation flag, one owner.
+   */
+  useEffect(() => {
+    if (!opened) return;
+
+    // Transient state from a previous open must never bleed into this one:
+    // stale red validation borders, a stale warning dialog, stale autocomplete
+    // suggestions, or a stale package photo.
+    setIsSubmitted(false);
+    setWarningModalOpened(false);
+    setSuggestions([]);
+    setManufacturerSuggestions([]);
+    setSelectedMedicine(null);
+    setLoading(false);
+    setManufacturerLoading(false);
+    setError(null);
+
+    if (!initialData) {
+      setOriginalIdentity(null);
+      resetFormFields();
+      return;
     }
-  }, [initialData, opened]);
+
+    const initialManufacturer =
+      initialData.manufacturername || initialData.manufacturer_name || '';
+
+    setMedicineName(initialData.name || '');
+    setManufacturer(initialManufacturer);
+    // Marked confirmed up front so the "0 records found" hint stays hidden for
+    // a value that came from the database rather than from typing.
+    setConfirmedManufacturer(initialManufacturer);
+    setMedicineType(normalizeMedicineType(initialData.type));
+    setPackSize(initialData.pack_size_label || '');
+    setComposition1(initialData.composition1 || '');
+    setMrp(initialData.mrp || 0);
+    setBatchNumber(initialData.batch_number || '');
+    setshelfrackinfo(initialData.shelf_rack_info || '');
+    setQuantity(initialData.stock_quantity || 0);
+    setPurchasePrice(initialData.purchase_price || 0);
+    setSellingPrice(initialData.selling_price || 0);
+    setAlertThreshold(initialData.stock_alert_threshold || 6);
+    setExpiryDate(toDateInputValue(initialData.expiry_date));
+    setImageUrl(initialData.image_url || '');
+
+    setOriginalIdentity({
+      name: initialData.name || '',
+      manufacturer: initialManufacturer,
+      packsize: (initialData.pack_size_label ?? '').toString(),
+      composition1: initialData.composition1 || '',
+      batchNumber: initialData.batch_number,
+    });
+
+    // Some payloads already carry the image; only hit the catalogue if not.
+    const lookupName = initialData.image_url ? '' : (initialData.name || '').trim();
+    if (!lookupName) return;
+
+    let ignore = false;
+
+    void (async () => {
+      try {
+        const response = await getMedicineByName(lookupName);
+        if (ignore) return;
+
+        const matches = response.data || [];
+        // Exact name match first, so a fuzzy suggestion cannot swap the image.
+        const exact = matches.find(
+          (med) => (med.name || '').trim().toLowerCase() === lookupName.toLowerCase()
+        );
+
+        // Always assign, including on a miss: a lookup that finds nothing must
+        // clear the preview rather than leave the previous record's photo up.
+        setImageUrl((exact ?? matches[0])?.image_url || '');
+      } catch {
+        // A catalogue miss must never block editing — the preview simply stays
+        // in its "no image" state, same as a medicine with no image on file.
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
+    // `initialData` is a dependency on purpose so switching records re-hydrates
+    // the form; the parent therefore passes a stable row reference (see
+    // `handleUpdateRecord` in the inventory page) rather than a fresh object
+    // per render, which would wipe in-progress edits.
+  }, [initialData, opened, resetFormFields]);
 
   const handleInitialSubmitCheck = () => {
     setIsSubmitted(true);
@@ -352,29 +475,6 @@ export default function InventoryModalForm({
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const resetFormFields = () => {
-    setMedicineName('');
-    setComposition1('');
-    setManufacturer('');
-    setQuantity(1);
-    setBatchNumber('');
-    setshelfrackinfo('');
-    setAlertThreshold(6);
-    setPackSize('');
-    setImageUrl('');
-    setPurchasePrice(0);
-    setSellingPrice(0);
-    setMrp(0);
-    setExpiryDate('');
-    setMedicineType('Allopathy');
-    setIsSubmitted(false);
-    setWarningModalOpened(false);
-    setSuggestions([]);
-    setManufacturerSuggestions([]);
-    setSelectedMedicine(null);
-    setConfirmedManufacturer('');
   };
 
   // --- STYLING ---
@@ -738,11 +838,20 @@ export default function InventoryModalForm({
                     position: 'relative'
                   }}
                 >
+                  {!imageurl && (
+                    <Stack align="center" justify="center" gap={6} h="100%">
+                      <IconPhotoOff size={22} color="#94a3b8" />
+                      <Text size="xs" c="dimmed" ta="center">
+                        No package image on file
+                      </Text>
+                    </Stack>
+                  )}
                   {imageurl && (
                     <>
                       <img
                         src={imageurl}
-                        alt="Medicine Package"
+                        alt={`${medicineName || 'Medicine'} package image`}
+                        onError={() => setImageUrl('')}
                         style={{
                           width: '100%',
                           height: '100%',
