@@ -25,8 +25,9 @@ import {
     IconAlertCircle,
     IconArrowsSort,
     IconSparkles,
-    IconInbox, IconEdit, IconTrash, IconPlus, IconListDetails
+    IconInbox, IconEdit, IconTrash, IconPlus, IconListDetails, IconCheck
 } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
 import { getInventoryList, deleteInventoryItem, type InventoryRecord } from '../services/inventory';
 import { API_BASE_URL } from '../services/apiClient';
 import AddInventory from './addinventory';
@@ -206,18 +207,41 @@ export default function Inventory() {
     }, [records, sortOption]);
 
     const [deleteRecord, setDeleteRecord] = useState<InventoryRecord | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const handleDeleteRecord = async () => {
-        if (!deleteRecord) return;
+        if (!deleteRecord || deleting) return;
+
+        const { id, name } = deleteRecord;
+        setDeleting(true);
+
         try {
-            setError(null);
-            await deleteInventoryItem({ id: deleteRecord.id, user: 'Sameena', reason: 'Not required' });
-            setRecords((prev) => prev.filter((item) => item.id !== deleteRecord.id));
+            await deleteInventoryItem({ id, user: 'Sameena', reason: 'Not required' });
+
+            // Optimistically drop the row and correct the pagination count.
+            setRecords((prev) => prev.filter((item) => item.id !== id));
             setTotalRecords((prev) => Math.max(0, prev - 1));
-            setDeleteRecord(null); // Close modal on success
+            setDeleteRecord(null); // Close modal only once the delete has landed.
+
+            notifications.show({
+                title: 'Record deleted',
+                message: `${name} was removed from inventory.`,
+                color: 'teal',
+                icon: <IconCheck size={16} />,
+            });
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Delete failed');
-            setDeleteRecord(null);
+            // Keep the modal open on failure so the user can retry or cancel.
+            notifications.show({
+                title: 'Delete failed',
+                message:
+                    err instanceof Error
+                        ? err.message
+                        : `Could not delete ${name}. Please try again.`,
+                color: 'red',
+                icon: <IconAlertCircle size={18} />,
+            });
+        } finally {
+            setDeleting(false);
         }
     };
     return (
@@ -596,7 +620,10 @@ export default function Inventory() {
 
             <Modal
                 opened={!!deleteRecord}
-                onClose={() => setDeleteRecord(null)}
+                onClose={() => !deleting && setDeleteRecord(null)}
+                closeOnClickOutside={!deleting}
+                closeOnEscape={!deleting}
+                withCloseButton={!deleting}
                 title={<Text fw={700} c="red.7">Warning: Permanent Action</Text>}
                 centered
                 size="sm"
@@ -613,6 +640,7 @@ export default function Inventory() {
                         color="gray"
                         size="sm"
                         w={{ base: '100%', sm: 'auto' }}
+                        disabled={deleting}
                         onClick={() => setDeleteRecord(null)}
                     >
                         Cancel
@@ -622,6 +650,7 @@ export default function Inventory() {
                         color="red"
                         size="sm"
                         w={{ base: '100%', sm: 'auto' }}
+                        loading={deleting}
                         onClick={handleDeleteRecord}
                     >
                         Yes, Delete

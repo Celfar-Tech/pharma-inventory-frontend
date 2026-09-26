@@ -253,3 +253,32 @@ export const updateBillingInvoice = async (
     throw toApiError(error, 'Failed to update invoice');
   }
 };
+
+export interface DeleteBillingInvoiceResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+export const deleteBillingInvoice = async (
+  invoiceNumber: string
+): Promise<DeleteBillingInvoiceResponse> => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/billing/invoice/${encodeURIComponent(invoiceNumber)}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+      credentials: 'include',
+    });
+
+    const response = await handleResponse(res);
+    const body: DeleteBillingInvoiceResponse = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(body.error || body.message || 'Failed to delete invoice');
+    }
+
+    return body;
+  } catch (error) {
+    throw toApiError(error, 'Failed to delete invoice');
+  }
+};

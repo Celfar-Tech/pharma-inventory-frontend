@@ -53,6 +53,7 @@ import InvoicePrint from './InvoicePrint';
 import { StatCell } from './StatCell';
 import styles from './invoices.module.css';
 import {
+  deleteBillingInvoice,
   getBillingInvoice,
   listBillingInvoices,
   updateBillingInvoice,
@@ -183,6 +184,7 @@ type InvoiceRowActionProps = {
   onView: (row: BillingInvoiceListItem) => void;
   onEdit: (row: BillingInvoiceListItem) => void;
   onPrint: (row: BillingInvoiceListItem) => void;
+  onDelete: (row: BillingInvoiceListItem) => void;
 };
 
 /**
@@ -190,7 +192,7 @@ type InvoiceRowActionProps = {
  * their hit area to 44px on touch devices (see index.css) without making the
  * desktop row look heavy.
  */
-function InvoiceIconActions({ row, onView, onEdit, onPrint }: InvoiceRowActionProps) {
+function InvoiceIconActions({ row, onView, onEdit, onPrint, onDelete }: InvoiceRowActionProps) {
   return (
     <Group justify="center" gap={4} wrap="nowrap">
       <ActionIcon
@@ -229,6 +231,18 @@ function InvoiceIconActions({ row, onView, onEdit, onPrint }: InvoiceRowActionPr
       >
         <IconPrinter size={16} />
       </ActionIcon>
+      <ActionIcon
+        data-touch-target
+        variant="subtle"
+        color="red"
+        radius="md"
+        size={32}
+        onClick={() => onDelete(row)}
+        aria-label={`Delete invoice ${row.invoice_number}`}
+        title="Delete invoice"
+      >
+        <IconTrash size={16} />
+      </ActionIcon>
     </Group>
   );
 }
@@ -237,7 +251,7 @@ function InvoiceIconActions({ row, onView, onEdit, onPrint }: InvoiceRowActionPr
  * Card actions: a labelled overflow menu. Three 16px glyphs are an unreliable
  * thumb target, and the labels double as the affordance.
  */
-function InvoiceCardActions({ row, onView, onEdit, onPrint }: InvoiceRowActionProps) {
+function InvoiceCardActions({ row, onView, onEdit, onPrint, onDelete }: InvoiceRowActionProps) {
   return (
     <Menu
       position="bottom-end"
@@ -269,13 +283,17 @@ function InvoiceCardActions({ row, onView, onEdit, onPrint }: InvoiceRowActionPr
         <Menu.Item leftSection={<IconPrinter size={16} />} onClick={() => onPrint(row)}>
           Print / download
         </Menu.Item>
+        <Menu.Divider />
+        <Menu.Item color="red" leftSection={<IconTrash size={16} />} onClick={() => onDelete(row)}>
+          Delete invoice
+        </Menu.Item>
       </Menu.Dropdown>
     </Menu>
   );
 }
 
 /** One invoice as a card — the compact-layout counterpart of a grid row. */
-function InvoiceCard({ row, onView, onEdit, onPrint }: InvoiceRowActionProps) {
+function InvoiceCard({ row, onView, onEdit, onPrint, onDelete }: InvoiceRowActionProps) {
   const totalDiscount = Number(row.discount_amount ?? 0) + Number(row.flat_discount ?? 0);
 
   return (
@@ -303,7 +321,13 @@ function InvoiceCard({ row, onView, onEdit, onPrint }: InvoiceRowActionProps) {
 
       <Group justify="space-between" align="center" wrap="nowrap" gap="sm">
         <StatCell label="Amount payable" value={money(row.final_payable)} tone="blue.7" emphasis />
-        <InvoiceCardActions row={row} onView={onView} onEdit={onEdit} onPrint={onPrint} />
+        <InvoiceCardActions
+          row={row}
+          onView={onView}
+          onEdit={onEdit}
+          onPrint={onPrint}
+          onDelete={onDelete}
+        />
       </Group>
     </Paper>
   );
@@ -376,6 +400,10 @@ export default function Invoices() {
   const [printError, setPrintError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+
+  // Delete confirmation state
+  const [deleteInvoice, setDeleteInvoice] = useState<BillingInvoiceListItem | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Reset to the first page whenever search or page size changes.
   useEffect(() => {
@@ -497,6 +525,38 @@ export default function Invoices() {
       setPrintError(err instanceof Error ? err.message : 'Failed to load invoice details.');
     } finally {
       setPrintLoading(false);
+    }
+  };
+
+  const openDelete = (row: BillingInvoiceListItem) => {
+    setDeleteInvoice(row);
+  };
+
+  const handleDeleteInvoice = async () => {
+    const target = deleteInvoice;
+    if (!target) return;
+    setDeleteLoading(true);
+    try {
+      await deleteBillingInvoice(target.invoice_number);
+      setDeleteInvoice(null);
+      // Reload from the server so the page totals and pagination stay correct.
+      setRefreshKey((key) => key + 1);
+      notifications.show({
+        title: 'Invoice deleted',
+        message: `Invoice ${target.invoice_number} has been permanently deleted.`,
+        color: 'teal',
+        icon: <IconCircleCheck size={18} />,
+      });
+    } catch (err) {
+      notifications.show({
+        title: 'Unable to delete invoice',
+        message: err instanceof Error ? err.message : 'Delete failed. Please try again.',
+        color: 'red',
+        icon: <IconAlertCircle size={18} />,
+      });
+      setDeleteInvoice(null);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -1153,6 +1213,7 @@ export default function Invoices() {
                   onView={openView}
                   onEdit={openEdit}
                   onPrint={openPrint}
+                  onDelete={openDelete}
                 />
               ))}
           </SimpleGrid>
@@ -1240,6 +1301,7 @@ export default function Invoices() {
                           onView={openView}
                           onEdit={openEdit}
                           onPrint={openPrint}
+                          onDelete={openDelete}
                         />
                       </Table.Td>
                     </Table.Tr>
@@ -1758,6 +1820,57 @@ export default function Invoices() {
             w={{ base: '100%', sm: 'auto' }}
           >
             Print
+          </Button>
+        </Flex>
+      </Modal>
+
+      {/* ------------------------------ Delete confirmation ------------------------------ */}
+      <Modal
+        opened={!!deleteInvoice}
+        onClose={() => {
+          if (!deleteLoading) setDeleteInvoice(null);
+        }}
+        title={
+          <Group gap="xs" wrap="nowrap">
+            <IconAlertCircle size={18} color="var(--mantine-color-red-6)" />
+            <Text fw={700} c="red.7">
+              Warning: Permanent Action
+            </Text>
+          </Group>
+        }
+        centered
+        size="sm"
+        overlayProps={{ backgroundOpacity: 0.55, blur: 3 }}
+      >
+        <Text size="sm" mb="lg">
+          Are you sure you want to permanently delete invoice{' '}
+          <strong>{deleteInvoice?.invoice_number}</strong>? This action cannot be undone.
+        </Text>
+        {/* Destructive actions stack full-width on phones so the primary
+            choice cannot be mis-tapped by a thumb. */}
+        <Flex direction={{ base: 'column-reverse', sm: 'row' }} justify="flex-end" gap="sm">
+          <Button
+            variant="light"
+            color="gray"
+            size="sm"
+            onClick={() => setDeleteInvoice(null)}
+            disabled={deleteLoading}
+            h={{ base: 44, sm: 36 }}
+            w={{ base: '100%', sm: 'auto' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="filled"
+            color="red"
+            size="sm"
+            leftSection={<IconTrash size={16} />}
+            onClick={handleDeleteInvoice}
+            loading={deleteLoading}
+            h={{ base: 44, sm: 36 }}
+            w={{ base: '100%', sm: 'auto' }}
+          >
+            Yes, Delete
           </Button>
         </Flex>
       </Modal>
