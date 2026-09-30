@@ -1,5 +1,6 @@
 import { useState, useCallback, type ChangeEvent, useEffect } from 'react';
 import {
+  Alert,
   TextInput,
   PasswordInput,
   Button,
@@ -32,6 +33,7 @@ import {
 import classes from './login.module.css';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../services/useAuth';
+import { AUTHENTICATED_HOME } from '../services/PublicRoute';
 
 import {
   sendRegistrationOtp,
@@ -185,6 +187,9 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  // Form-level error for failures that belong to no single field (e.g. invalid
+  // credentials). Field errors stay on `form` via `setFieldError`.
+  const [formError, setFormError] = useState('');
   const [countdown, setCountdown] = useState(60);
   const [otpToken, setOtpToken] = useState<string | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -276,11 +281,12 @@ export function LoginPage() {
     async (values: FormValues) => {
       setLoading(true);
       setSuccessMsg('');
+      setFormError('');
 
       try {
         if (type === 'login') {
           await login({ email: values.email, password: values.password });
-          navigate('/dashboard');
+          navigate(AUTHENTICATED_HOME);
         } else if (type === 'register_email') {
           const data = await sendRegistrationOtp(values.email);
           const payload = data && data.data ? data.data : data;
@@ -318,7 +324,7 @@ export function LoginPage() {
           try {
             await login({ email: values.email, password: values.password });
             setSuccessMsg('Account created successfully!');
-            navigate('/dashboard');
+            navigate(AUTHENTICATED_HOME);
           } catch {
             setSuccessMsg('Account created successfully! Please sign in to continue.');
             form.setFieldValue('password', '');
@@ -361,12 +367,15 @@ export function LoginPage() {
       } catch (error: any) {
         const errorMessage = error.message || 'Server connection lost. Please try again.';
 
+        // The API returns one generic message for bad credentials on purpose, so
+        // it does not reveal whether the email or the password was wrong. That
+        // means it cannot be attributed to a single input — show it above the
+        // form. (The previous `message.includes('password')` heuristic put
+        // "invalid credentials" under the *email* field.)
         if (type === 'register_otp' || type === 'forgot_otp') {
           form.setFieldError('otp', errorMessage);
-        } else if (errorMessage.toLowerCase().includes('password')) {
-          form.setFieldError('password', errorMessage);
         } else {
-          form.setFieldError('email', errorMessage);
+          setFormError(errorMessage);
         }
       } finally {
         setLoading(false);
@@ -379,6 +388,7 @@ export function LoginPage() {
     form.reset();
     setOtpToken(null);
     setSuccessMsg('');
+    setFormError('');
     setType((prev) => (prev === 'login' ? 'register_email' : 'login'));
   }, [form]);
 
@@ -386,6 +396,7 @@ export function LoginPage() {
     form.reset();
     setOtpToken(null);
     setSuccessMsg('');
+    setFormError('');
     setCountdown(60);
     setType('forgot_password');
   }, [form]);
@@ -394,6 +405,7 @@ export function LoginPage() {
     form.reset();
     setOtpToken(null);
     setSuccessMsg('');
+    setFormError('');
     setCountdown(60);
     setType('login');
   }, [form]);
@@ -495,6 +507,8 @@ export function LoginPage() {
 
           <Paper withBorder shadow="xl" p={32} radius="lg" className={classes.authCard}>
           {successMsg && <Text c="teal" fw={600} ta="center" mb="md">{successMsg}</Text>}
+
+          {formError && <Alert color="red" variant="light" radius="md" mb="md">{formError}</Alert>}
 
           <form onSubmit={form.onSubmit(handleSubmit)}>
             <Stack gap="md">

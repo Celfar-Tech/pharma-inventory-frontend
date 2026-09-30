@@ -55,8 +55,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, []);
 
+  // NOTE: deliberately does *not* set `status: 'loading'` here.
+  //
+  // `status` answers exactly one question — "do we know yet whether there is a
+  // session?" — and route guards render a full-screen loader while it is
+  // `loading`. Flipping it during a login attempt therefore unmounts the very
+  // form that is submitting: the request fails, `forceLogout()` restores
+  // `unauthenticated`, and a freshly mounted (empty) login form is rendered,
+  // so the error written to the old form instance is silently lost. The submit
+  // button's own `loading` flag covers the in-flight spinner instead.
   const login = async (credentials: LoginPayload) => {
-    setStatus('loading');
     try {
       const response = await loginUser(credentials);
       if (response && response.user) {

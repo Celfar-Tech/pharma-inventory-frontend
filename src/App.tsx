@@ -16,6 +16,7 @@ import Invoices from './components/Invoices';
 
 // 🌟 Ensure your Auth imports are correct based on your file paths
 import ProtectedRoute from './services/ProtectedRoute';
+import PublicRoute from './services/PublicRoute';
 import { AuthProvider } from './services/authcontext'; 
 
 /** Width of the desktop sidebar rail, expanded and icon-only. */
@@ -104,8 +105,11 @@ export default function App() {
         <MantineProvider defaultColorScheme="light">
           
           <Routes>
-            {/* 🔓 PUBLIC ROUTE */}
-            <Route path="/" element={<LoginPage />} />
+            {/* 🔓 PUBLIC ROUTES — guest only. A signed-in visitor is sent
+                straight to the dashboard instead of seeing the login form. */}
+            <Route element={<PublicRoute />}>
+              <Route path="/" element={<LoginPage />} />
+            </Route>
 
             {/* 🔒 PROTECTED ROUTES */}
             <Route element={<ProtectedRoute />}>
