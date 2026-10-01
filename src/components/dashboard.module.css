@@ -1,0 +1,24 @@
+/* ---------------------------------------------------------------------------
+ * Dashboard layout — scoped styles.
+ *
+ * The revenue chart and the top-sellers leaderboard share one screen instead of
+ * living behind tabs. On desktop the chart takes the wider left column and the
+ * leaderboard sits beside it on the right; below `md` (62em) they stack in a
+ * single column so neither card is squeezed on a phone.
+ *
+ * `minmax(0, …)` is what lets a card shrink below its content's intrinsic width —
+ * without it Recharts' fixed-size SVG would force the whole page to overflow.
+ * ------------------------------------------------------------------------- */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (min-width: 62em) {
+  .layout {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  }
+}
