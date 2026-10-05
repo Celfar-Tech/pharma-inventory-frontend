@@ -322,22 +322,22 @@ export default function RevenueChart() {
             accessibilityLayer
           >
             <defs>
-              {/* Standard column: teal gradient that deepens toward the baseline. */}
+              {/* Standard column: blue gradient that deepens toward the baseline. */}
               <linearGradient id="revenueBarFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--mantine-color-teal-4)" />
-                <stop offset="55%" stopColor="var(--mantine-color-teal-6)" />
-                <stop offset="100%" stopColor="var(--mantine-color-teal-8)" stopOpacity={0.85} />
+                <stop offset="0%" stopColor="var(--mantine-color-blue-4)" />
+                <stop offset="55%" stopColor="var(--mantine-color-blue-6)" />
+                <stop offset="100%" stopColor="var(--mantine-color-blue-8)" stopOpacity={0.85} />
               </linearGradient>
-              {/* Peak period: cooler cyan-teal so the best bucket reads instantly. */}
+              {/* Peak period: cooler cyan-blue so the best bucket reads instantly. */}
               <linearGradient id="revenueBarPeakFill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="var(--mantine-color-cyan-4)" />
-                <stop offset="60%" stopColor="var(--mantine-color-teal-5)" />
-                <stop offset="100%" stopColor="var(--mantine-color-teal-7)" />
+                <stop offset="60%" stopColor="var(--mantine-color-blue-5)" />
+                <stop offset="100%" stopColor="var(--mantine-color-blue-7)" />
               </linearGradient>
               {/* Hovered column: brightened, matching the rounded hover band. */}
               <linearGradient id="revenueBarActiveFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--mantine-color-teal-1)" />
-                <stop offset="100%" stopColor="var(--mantine-color-teal-4)" />
+                <stop offset="0%" stopColor="var(--mantine-color-blue-1)" />
+                <stop offset="100%" stopColor="var(--mantine-color-blue-4)" />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--mantine-color-gray-2)" />
@@ -362,7 +362,7 @@ export default function RevenueChart() {
             <ChartTooltip
               cursor={{
                 className: styles.barCursor,
-                fill: 'var(--mantine-color-teal-0)',
+                fill: 'var(--mantine-color-blue-0)',
                 fillOpacity: 0.9,
               }}
               content={(tooltipProps) => <ChartTip {...tooltipProps} currency={currency} />}
@@ -399,7 +399,7 @@ export default function RevenueChart() {
               }}
               activeBar={{
                 fill: 'url(#revenueBarActiveFill)',
-                stroke: 'var(--mantine-color-teal-6)',
+                stroke: 'var(--mantine-color-blue-6)',
                 strokeWidth: 1.5,
                 radius: 10,
               }}
@@ -476,7 +476,7 @@ export default function RevenueChart() {
       {/* ---------- Header: title + timeframe switcher + refresh ---------- */}
       <div className={styles.headerRow}>
         <Group gap="sm" align="center">
-          <ThemeIcon variant="light" color="teal" size="lg" radius="md">
+          <ThemeIcon variant="light" color="blue" size="lg" radius="md">
             <Wallet size={18} />
           </ThemeIcon>
           <div className={styles.titleBlock}>
@@ -495,7 +495,7 @@ export default function RevenueChart() {
             value={timeframe}
             onChange={handleTimeframeChange}
             size="xs"
-            color="teal"
+            color="blue"
           />
           <ActionIcon
             variant="light"
@@ -607,7 +607,7 @@ export default function RevenueChart() {
       {isReady && hasSales && (
         <>
           <div className={styles.rangeCaption}>
-            <Badge size="sm" variant="light" color={isCustom ? 'blue' : 'teal'} leftSection={<Calendar size={11} />}>
+            <Badge size="sm" variant="light" color={isCustom ? 'cyan' : 'blue'} leftSection={<Calendar size={11} />}>
               {data?.granularity} buckets
             </Badge>
             <Text size="xs" c="gray.6">
@@ -661,7 +661,7 @@ export default function RevenueChart() {
               {error || 'Something went wrong while loading the revenue chart.'}
             </Alert>
             <Group gap="sm">
-              <ActionIcon variant="filled" color="teal" onClick={refresh} aria-label="Retry">
+              <ActionIcon variant="filled" color="blue" onClick={refresh} aria-label="Retry">
                 <RefreshCw size={16} />
               </ActionIcon>
               <ActionIcon variant="light" color="gray" onClick={reset} aria-label="Reset to daily view">

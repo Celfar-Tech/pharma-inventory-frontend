@@ -1,0 +1,344 @@
+/* ---------------------------------------------------------------------------
+ * Top-selling medicines card — scoped styles.
+ *
+ * The card sits beside the revenue chart and is one ranked leaderboard, so these rules cover
+ * the labelled toolbar, the list header, the compact medicine rows (rank pill + relative bar)
+ * and the loading skeleton only. Layout chrome comes from Mantine; the palette follows the
+ * revenue card (blue accents on a grey track) with a warm gold accent reserved for the
+ * best-selling medicine.
+ * ------------------------------------------------------------------------- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ---- Toolbar: which periods to show, and how to order them --------------- */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 18px;
+}
+
+/* One labelled control. The label sits above the control so each choice reads as a
+   named field instead of a loose segmented control floating in the header. */
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.controlLabel {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mantine-color-gray-6);
+}
+
+/* Bottom border separates the toolbar from the list without a full divider. */
+.rangeNote {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--mantine-color-gray-2);
+}
+
+/* ---- List header (count summary + how many rows to show) ----------------- */
+
+.listHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.listFootnote {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ---- Medicine leaderboard (best sellers first) ---------------------------
+ * One medicine per row. A row is the medicine name with the relative bar directly under it
+ * and the units/revenue pair on the right, so a screenful of rows stays roughly as tall as
+ * the revenue chart beside it.
+ * ------------------------------------------------------------------------- */
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-bottom: 1px solid var(--mantine-color-gray-2);
+  border-radius: var(--mantine-radius-sm);
+  /* Rows keep their identity by medicine, so only the ones a larger page size reveals
+     animate (each carries its slice delay inline) — growing the list reads as a
+     cascade, not a jump. */
+  animation: row-in 240ms ease-out both;
+  transition: background 140ms ease;
+}
+
+.row:hover {
+  background: var(--mantine-color-blue-0);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mantine-color-gray-7);
+  background: var(--mantine-color-gray-1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Podium: gold / silver / bronze for the three best-selling medicines. The rank always
+   matches the active metric, so a medal can never look like it ended up in the wrong place. */
+.rankGold {
+  color: var(--mantine-color-yellow-9);
+  background: linear-gradient(135deg, var(--mantine-color-yellow-2), var(--mantine-color-orange-2));
+}
+
+.rankSilver {
+  color: var(--mantine-color-gray-8);
+  background: linear-gradient(135deg, var(--mantine-color-gray-1), var(--mantine-color-gray-3));
+}
+
+.rankBronze {
+  color: #8a5a2b;
+  background: linear-gradient(135deg, var(--mantine-color-orange-1), var(--mantine-color-orange-3));
+}
+
+.rowBody {
+  min-width: 0;
+}
+
+.rowName {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--mantine-color-gray-9);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barTrack {
+  height: 4px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--mantine-color-gray-1);
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  min-width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--mantine-color-blue-4), var(--mantine-color-blue-7));
+}
+
+.rowValues {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rowUnits {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--mantine-color-gray-9);
+  font-variant-numeric: tabular-nums;
+}
+
+.rowUnitsLabel {
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mantine-color-gray-5);
+}
+
+.rowRevenue {
+  font-size: 11px;
+  color: var(--mantine-color-gray-6);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The value the list is ranked by leads: units for "Most sold", revenue for "Highest
+   revenue". Without this the muted revenue line would read as noise in a revenue-ranked
+   list, and vice versa. */
+.rowValues[data-sort='revenue'] .rowUnits {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mantine-color-gray-6);
+}
+
+.rowValues[data-sort='revenue'] .rowRevenue {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--mantine-color-gray-9);
+}
+
+/* ---- Shared state panels / skeleton -------------------------------------- */
+
+.statePanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 260px;
+  padding: 24px;
+  text-align: center;
+}
+
+.statePanelTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--mantine-color-gray-8);
+}
+
+.statePanelHint {
+  max-width: 480px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--mantine-color-gray-6);
+}
+
+.skeletonWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skeletonPill {
+  width: 26px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--mantine-color-gray-2);
+}
+
+.skeletonBar {
+  height: 42px;
+  flex: 1;
+  border-radius: var(--mantine-radius-sm);
+  background: linear-gradient(90deg, var(--mantine-color-gray-1), var(--mantine-color-gray-2));
+  animation: top-seller-pulse 1.4s ease-in-out infinite;
+}
+
+.skeletonRow:nth-child(2n) .skeletonBar {
+  animation-delay: 0.15s;
+}
+
+.skeletonRow:nth-child(3n) .skeletonBar {
+  animation-delay: 0.3s;
+}
+
+@keyframes top-seller-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    animation: none;
+  }
+}
+
+/* Phones: the units/revenue pair moves under the bar so nothing has to be truncated to make a
+   row fit a 360px viewport. */
+@media (max-width: 30em) {
+  .row {
+    grid-template-areas:
+      'rank body'
+      'rank values';
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 8px 6px;
+  }
+
+  .rank {
+    grid-area: rank;
+  }
+
+  .rowBody {
+    grid-area: body;
+  }
+
+  .rowName {
+    width: 100%;
+  }
+
+  .rowValues {
+    grid-area: values;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+    margin-top: 3px;
+    text-align: left;
+  }
+}

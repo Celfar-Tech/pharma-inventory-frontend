@@ -101,11 +101,11 @@
 }
 
 .legendSwatchBar {
-  background: linear-gradient(180deg, var(--mantine-color-teal-4), var(--mantine-color-teal-8));
+  background: linear-gradient(180deg, var(--mantine-color-blue-4), var(--mantine-color-blue-8));
 }
 
 .legendSwatchPeak {
-  background: linear-gradient(180deg, var(--mantine-color-cyan-4), var(--mantine-color-teal-7));
+  background: linear-gradient(180deg, var(--mantine-color-cyan-4), var(--mantine-color-blue-7));
 }
 
 .legendSwatchAvg {
@@ -172,7 +172,7 @@
   flex: 1;
   max-width: 64px;
   border-radius: var(--mantine-radius-sm) var(--mantine-radius-sm) 0 0;
-  background: linear-gradient(180deg, var(--mantine-color-teal-1), var(--mantine-color-gray-1));
+  background: linear-gradient(180deg, var(--mantine-color-blue-1), var(--mantine-color-gray-1));
   animation: revenue-pulse 1.4s ease-in-out infinite;
 }
 
@@ -236,7 +236,7 @@
   height: 8px;
   border-radius: 50%;
   /* Mirrors the bar gradient (the SVG fill is a url() reference, not a color). */
-  background: linear-gradient(180deg, var(--mantine-color-teal-4), var(--mantine-color-teal-7));
+  background: linear-gradient(180deg, var(--mantine-color-blue-4), var(--mantine-color-blue-7));
 }
 
 .chartTooltipValue {
@@ -256,12 +256,12 @@
 
 /* Highlights the strongest period, matching the peak bar gradient. */
 .statTileAccent {
-  border-color: var(--mantine-color-teal-2);
-  background: linear-gradient(135deg, var(--mantine-color-teal-0), var(--mantine-color-cyan-0));
+  border-color: var(--mantine-color-blue-2);
+  background: linear-gradient(135deg, var(--mantine-color-blue-0), var(--mantine-color-cyan-0));
 }
 
 .statTileAccent .statTileLabel {
-  color: var(--mantine-color-teal-8);
+  color: var(--mantine-color-blue-8);
 }
 
 .statTileLabel {
