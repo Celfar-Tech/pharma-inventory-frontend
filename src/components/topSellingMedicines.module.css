@@ -84,6 +84,13 @@
 .list {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 450px;
+  padding-right: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .row {
@@ -109,6 +116,24 @@
   border-bottom: none;
 }
 
+/* Thin, quiet scrollbar: only the ranked rows should draw the eye. */
+.list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--mantine-color-gray-3);
+}
+
+.list::-webkit-scrollbar-thumb:hover {
+  background: var(--mantine-color-gray-4);
+}
+
 .rank {
   display: inline-flex;
   align-items: center;
@@ -132,13 +157,13 @@
 }
 
 .rankSilver {
-  color: var(--mantine-color-gray-8);
-  background: linear-gradient(135deg, var(--mantine-color-gray-1), var(--mantine-color-gray-3));
+   color: var(--mantine-color-yellow-9);
+  background: linear-gradient(135deg, var(--mantine-color-yellow-2), var(--mantine-color-orange-2));
 }
 
 .rankBronze {
-  color: #8a5a2b;
-  background: linear-gradient(135deg, var(--mantine-color-orange-1), var(--mantine-color-orange-3));
+   color: var(--mantine-color-yellow-9);
+  background: linear-gradient(135deg, var(--mantine-color-yellow-2), var(--mantine-color-orange-2));
 }
 
 .rowBody {
@@ -226,6 +251,8 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
+  /* Fills the stretched card body so the message stays optically centered. */
+  flex: 1 1 auto;
   min-height: 260px;
   padding: 24px;
   text-align: center;

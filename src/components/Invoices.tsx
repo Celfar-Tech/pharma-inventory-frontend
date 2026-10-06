@@ -1381,7 +1381,9 @@ export default function Invoices() {
             <SimpleGrid cols={{ base: 2, sm: 3 }}>
               <div>
                 <Text size="xs" c="dimmed">Invoice date</Text>
-                <Text fw={600}>{formatInvoiceDate(invoice.invoice_date)}</Text>
+                <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
+                  {formatInvoiceDate(invoice.invoice_date)}
+                </Text>
               </div>
               <div>
                 <Text size="xs" c="dimmed">Payment type</Text>
@@ -1389,34 +1391,46 @@ export default function Invoices() {
               </div>
               <div>
                 <Text size="xs" c="dimmed">Created by</Text>
-                <Text fw={600}>{invoice.created_by || '—'}</Text>
+                <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
+                  {invoice.created_by || '—'}
+                </Text>
               </div>
               <div>
                 <Text size="xs" c="dimmed">Customer</Text>
-                <Text fw={600}>{invoice.customer_name || '—'}</Text>
+                <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
+                  {invoice.customer_name || '—'}
+                </Text>
               </div>
               <div>
                 <Text size="xs" c="dimmed">Doctor</Text>
-                <Text fw={600}>{invoice.doctor_name || '—'}</Text>
+                <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
+                  {invoice.doctor_name || '—'}
+                </Text>
               </div>
               <div>
                 <Text size="xs" c="dimmed">Phone</Text>
-                <Text fw={600}>{invoice.phone_number || '—'}</Text>
+                <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
+                  {invoice.phone_number || '—'}
+                </Text>
               </div>
               <div>
                 <Text size="xs" c="dimmed">Age / Gender</Text>
-                <Text fw={600}>
+                <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
                   {invoice.patient_age != null ? `${invoice.patient_age} yrs` : '—'}
                   {invoice.patient_gender ? ` · ${invoice.patient_gender}` : ''}
                 </Text>
               </div>
               <div>
                 <Text size="xs" c="dimmed">GSTIN</Text>
-                <Text fw={600}>{invoice.gstin || '—'}</Text>
+                <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
+                  {invoice.gstin || '—'}
+                </Text>
               </div>
               <div>
                 <Text size="xs" c="dimmed">Address</Text>
-                <Text fw={600}>{invoice.address || '—'}</Text>
+                <Text fw={600} style={{ overflowWrap: 'anywhere' }}>
+                  {invoice.address || '—'}
+                </Text>
               </div>
             </SimpleGrid>
 

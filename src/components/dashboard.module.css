@@ -8,13 +8,18 @@
  *
  * `minmax(0, …)` is what lets a card shrink below its content's intrinsic width —
  * without it Recharts' fixed-size SVG would force the whole page to overflow.
+ *
+ * `align-items: stretch` (the default) is deliberate: both cards are stretched to the
+ * same row height, so the shorter one — whichever it is — fills the extra space instead
+ * of ending in mid-air. Each card's flexible region (the chart stage / the seller list)
+ * absorbs that height.
  * ------------------------------------------------------------------------- */
 
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
 }
 
 @media (min-width: 62em) {
