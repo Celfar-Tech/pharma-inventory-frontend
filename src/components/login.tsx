@@ -518,9 +518,6 @@ export function LoginPage() {
                 <>
                   <TextInput label="Work Email" placeholder="name@pharmacy.com" required radius="md" {...form.getInputProps('email')} />
                   <PasswordInput label="Password" placeholder="••••••••" required radius="md" {...form.getInputProps('password')} />
-                  <Anchor component="button" type="button" onClick={goToForgotPassword} size="xs" fw={500} c="blue.6" ta="right">
-                    Forgot password?
-                  </Anchor>
                 </>
               )}
 
@@ -619,7 +616,7 @@ export function LoginPage() {
                   </Button>
                 </Group>
               ) : (
-                <Button type="submit" fullWidth radius="md" mt="xs" loading={loading}>
+                <Button type="submit" fullWidth radius="xl" mt="xs" loading={loading}>
                   {type === 'login'
                     ? 'Secure Sign In'
                     : type === 'register_details'
@@ -631,18 +628,42 @@ export function LoginPage() {
                           : 'Send Verification Code'}
                 </Button>
               )}
+
+              {type === 'login' && (
+                <Button
+                  type="button"
+                  onClick={goToForgotPassword}
+                  fullWidth
+                  size="sm"
+                  radius="xl"
+                  variant="subtle"
+                  // subtle buttons take their hover background from --button-hover
+                  style={{
+                    color: '#000000',
+                    fontWeight: 700,
+                    border: 'none',
+                    '--button-hover': '#F1F3F5',
+                  }}
+                >
+                  Forgot password?
+                </Button>
+              )}
             </Stack>
           </form>
 
           {(type === 'login' || type === 'register_email' || type === 'forgot_password') && (
             <Group justify="center" mt="md">
-              <Anchor component="button" type="button" onClick={type === 'login' ? toggleAuthMode : goBackToLogin} size="xs" fw={500}>
+              <Button
+              variant="outline" color="blue" fullWidth size="sm" radius="xl"
+                type="button"
+                onClick={type === 'login' ? toggleAuthMode : goBackToLogin}
+              >
                 {type === 'login'
-                  ? "Don't have an account? Register here"
+                  ? "Register for an account"
                   : type === 'register_email'
                     ? 'Already have an account? Sign in'
                     : 'Back to login'}
-              </Anchor>
+              </Button>
             </Group>
           )}
 
