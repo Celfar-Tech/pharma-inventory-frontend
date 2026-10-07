@@ -15,6 +15,7 @@ import {
   Bell,
   LayoutDashboard,
   Boxes,
+  BookMarked,
   ShoppingCart,
   Receipt,
   Pill,
@@ -54,6 +55,11 @@ const PAGE_META: Record<string, PageMeta> = {
     title: 'Inventory',
     subtitle: 'Medicines, batches and expiry tracking',
     icon: Boxes,
+  },
+  '/book': {
+    title: 'Order Book',
+    subtitle: 'Medicines you plan to order next',
+    icon: BookMarked,
   },
   '/billing': {
     title: 'New Billing',
