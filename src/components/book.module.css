@@ -1,0 +1,66 @@
+/* ---------------------------------------------------------------------------
+ * Order Book — scoped presentation layer.
+ * Layout and responsiveness still come from Mantine (breakpoint props, touch
+ * targets); this file only *paints* the list so the markup stays declarative
+ * and every colour resolves through Mantine's theme variables.
+ * ------------------------------------------------------------------------- */
+
+/* One planned medicine. Two tracks on desktop (details | numbers + actions),
+   collapsing to a single column on phones. `minmax(0, 1fr)` is what stops a
+   long composition/remark from widening the card past its track. */
+.entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--mantine-color-white);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.entry:hover {
+  border-color: var(--mantine-color-blue-3);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+}
+
+.entryMain {
+  min-width: 0;
+}
+
+/* Long compositions stay on a single line so row heights never wobble. */
+.truncate {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Remarks may wrap, but a pasted URL must not blow the card open. */
+.remark {
+  overflow-wrap: anywhere;
+}
+
+.entryAside {
+  justify-self: end;
+}
+
+/* Dashed placeholder shown while the book is empty. */
+.empty {
+  border: 1px dashed var(--mantine-color-gray-3);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--mantine-color-gray-0);
+  padding: 40px 20px;
+}
+
+@media (max-width: 48em) {
+  .entry {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .entryAside {
+    justify-self: stretch;
+    justify-content: space-between;
+  }
+}

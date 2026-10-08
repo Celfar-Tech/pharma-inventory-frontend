@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   Pill,
   Boxes,
+  BookMarked,
   ShoppingCart,
   Receipt,
   ChevronLeft,
@@ -39,6 +40,7 @@ interface SidebarProps {
 const LINKS_DATA = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
   { id: 'inventory', label: 'Inventory', icon: Boxes, path: '/inventory' },
+  { id: 'book', label: 'Order Book', icon: BookMarked, path: '/book' },
   { id: 'billing', label: 'New Billing', icon: ShoppingCart, path: '/billing' },
   { id: 'invoices', label: 'Invoices', icon: Receipt, path: '/invoices' },
 ];

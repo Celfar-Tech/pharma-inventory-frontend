@@ -13,6 +13,7 @@ import Inventory from './components/inventory';
 import NotFoundPage from './components/notfound';
 import Billing from './components/billing';
 import Invoices from './components/Invoices';
+import Book from './components/book';
 
 // 🌟 Ensure your Auth imports are correct based on your file paths
 import ProtectedRoute from './services/ProtectedRoute';
@@ -117,6 +118,7 @@ export default function App() {
               <Route element={<AppLayout />}>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/inventory" element={<Inventory />} />
+                <Route path="/book" element={<Book />} />
                 <Route path="/billing" element={<Billing />} />
                 <Route path="/invoices" element={<Invoices />} />
               </Route>
