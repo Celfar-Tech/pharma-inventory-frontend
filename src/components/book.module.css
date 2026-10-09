@@ -46,6 +46,114 @@
   justify-self: end;
 }
 
+/* ---------------------------------------------------------------------------
+ * Panel toolbar — the tinted header band at the top of the list panel.
+ * The negative margin cancels the surrounding `<Paper p="lg">` padding (24px)
+ * plus its 1px border, so the band bleeds flush to the card's outer edge and
+ * the whole thing reads as one card with a designed header rather than a card
+ * nested inside another card. If that padding ever changes, update the margin.
+ * ------------------------------------------------------------------------- */
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  margin: calc((var(--mantine-spacing-lg) + 1px) * -1)
+    calc((var(--mantine-spacing-lg) + 1px) * -1) var(--mantine-spacing-md);
+  border-bottom: 1px solid var(--mantine-color-gray-2);
+  border-radius: calc(var(--mantine-radius-lg) - 1px) calc(var(--mantine-radius-lg) - 1px) 0 0;
+  background:
+    radial-gradient(120% 180% at 0% 0%, var(--mantine-color-blue-1) 0%, transparent 58%),
+    linear-gradient(180deg, var(--mantine-color-gray-0) 0%, var(--mantine-color-white) 100%);
+}
+
+.toolbarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* `min-width: 0` lets the subtitle truncate instead of pushing the switch out. */
+.toolbarIdentity {
+  min-width: 0;
+}
+
+/* Gradient tile echoing the app header's page-identity chip. */
+.toolbarIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  color: var(--mantine-color-white);
+  background: linear-gradient(
+    135deg,
+    var(--mantine-color-blue-6) 0%,
+    var(--mantine-color-cyan-5) 100%
+  );
+  box-shadow: 0 4px 10px rgba(28, 126, 214, 0.24);
+}
+
+.toolbarTitle {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Counts riding inside the segmented control's labels. */
+.segmentLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.segmentCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background-color: var(--mantine-color-gray-2);
+  color: var(--mantine-color-gray-7);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Supplier details sit under a dashed rule so they read as "order metadata". */
+.supplierStrip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px dashed var(--mantine-color-gray-3);
+}
+
+.supplierCaption {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--mantine-color-gray-6);
+}
+
+.supplierField {
+  flex: 1 1 140px;
+  max-width: 200px;
+}
+
+/* Keeps the primary action pinned to the far edge while the strip is one row. */
+.supplierAction {
+  margin-inline-start: auto;
+}
+
 /* Dashed placeholder shown while the book is empty. */
 .empty {
   border: 1px dashed var(--mantine-color-gray-3);
@@ -60,6 +168,212 @@
   }
 
   .entryAside {
+    justify-self: stretch;
+    justify-content: space-between;
+  }
+}
+
+/* Phones: the supplier row becomes a compact grid — the caption heads the
+   block, the two fields share a row when they fit (and stack when they do not),
+   and the primary action keeps a full-width, easy-to-hit target. */
+@media (max-width: 40em) {
+  .supplierStrip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    align-items: start;
+    gap: 10px;
+  }
+
+  .supplierCaption {
+    grid-column: 1 / -1;
+  }
+
+  .supplierField {
+    max-width: none;
+  }
+
+  .supplierAction {
+    grid-column: 1 / -1;
+    margin-inline-start: 0;
+    width: 100%;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Scrollable list body
+ * The list/history panels keep a fixed ceiling so a long book never pushes the
+ * page (or the supplier strip) off screen. `overflow-y: auto` turns the panel
+ * body into its own scroll region, and `overscroll-behavior: contain` stops the
+ * page behind it from scrolling once the inner list reaches its end.
+ * ------------------------------------------------------------------------- */
+.scrollList {
+  max-height: min(62vh, 620px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mantine-color-gray-4) transparent;
+}
+
+.scrollList::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollList::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: var(--mantine-color-gray-4);
+}
+
+/* ---------------------------------------------------------------------------
+ * Order history — one expandable card per placed order. The header row is a
+ * real <button> so the disclosure is keyboard-operable and announced correctly;
+ * the medicines are only rendered once the row is expanded.
+ * ------------------------------------------------------------------------- */
+.ledgerCard {
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--mantine-color-white);
+  overflow: hidden;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.ledgerCard:hover {
+  border-color: var(--mantine-color-blue-3);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+}
+
+.ledgerToggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  /* The header stays on a single line. When it is wider than the card —
+     common on phones — the whole row scrolls horizontally so the supplier,
+     date, totals and order id all stay reachable instead of being clipped by
+     the badge. `overscroll-behavior-x` stops the page gesture behind it. */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mantine-color-gray-4) transparent;
+}
+
+.ledgerToggle::-webkit-scrollbar {
+  height: 6px;
+}
+
+.ledgerToggle::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background-color: var(--mantine-color-gray-4);
+}
+
+.ledgerChevron {
+  flex-shrink: 0;
+  color: var(--mantine-color-gray-6);
+  transition: transform 160ms ease;
+}
+
+.ledgerChevron[data-expanded] {
+  transform: rotate(90deg);
+}
+
+/* The summary reads as a single line (supplier · date · items · cost). It keeps
+   its natural width (`max-content`) so the row overflows and scrolls rather
+   than shrinking the text; the parent `.ledgerToggle` owns the scrollbar. */
+.ledgerSummary {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 10px;
+  flex: 1 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
+}
+
+.ledgerSupplier {
+  flex-shrink: 0;
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ledgerMeta {
+  flex-shrink: 0;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  white-space: nowrap;
+}
+
+/* Order id keeps its full width while the row scrolls. */
+.ledgerBadge {
+  flex-shrink: 0;
+}
+
+.ledgerPanel {
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--mantine-color-gray-2);
+  background-color: var(--mantine-color-gray-0);
+}
+
+.ledgerTableScroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mantine-color-gray-4) transparent;
+}
+
+.ledgerTableScroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.ledgerTableScroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background-color: var(--mantine-color-gray-4);
+}
+
+.ledgerTable {
+  min-width: 420px;
+}
+
+.ledgerTable th,
+.ledgerTable td {
+  white-space: nowrap;
+}
+
+.ledgerItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--mantine-color-white);
+}
+
+.ledgerItemMain {
+  min-width: 0;
+}
+
+.ledgerItemAside {
+  justify-self: end;
+}
+
+@media (max-width: 48em) {
+  .ledgerItem {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ledgerItemAside {
     justify-self: stretch;
     justify-content: space-between;
   }

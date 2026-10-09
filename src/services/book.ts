@@ -39,6 +39,31 @@ export interface OrderHistoryEntry extends OrderBookEntry {
   orderedAt: string;
 }
 
+/**
+ * One placed order. `GET /book/history` returns these summaries (newest first)
+ * and *not* the medicines themselves — the lines live in `book_items` and are
+ * loaded per-ledger with `getLedgerItems` only when a row is expanded.
+ */
+export interface OrderLedger {
+  ledgerId: string;
+  /** When the order was placed (ISO). */
+  date: string;
+  orderedAt: string;
+  supplierName: string;
+  supplierEmail: string;
+  /** Number of distinct medicines in the order. */
+  itemCount: number;
+  /** Approximate order cost in rupees. */
+  approxCost: number;
+  status: string;
+}
+
+/** A single ledger together with the medicines it holds (expand-on-demand). */
+export interface OrderLedgerDetail {
+  ledger: OrderLedger;
+  items: OrderHistoryEntry[];
+}
+
 export interface OrderBookInput {
   medicineId?: number | null;
   name: string;
@@ -60,9 +85,18 @@ export interface BookMutationResult {
 
 export interface PlaceOrderResult {
   entries: OrderBookEntry[];
-  history: OrderHistoryEntry[];
+  /** Summary of every placed order, newest first. */
+  history: OrderLedger[];
   /** The lines that were just moved into history. */
   placed: OrderHistoryEntry[];
+  /** The ledger the new order was written to, when one was created. */
+  ledgerId: string | null;
+}
+
+export interface PlaceOrderInput {
+  ids: string[];
+  supplierName: string;
+  supplierEmail: string;
 }
 
 interface BookApiResponse<T> {
@@ -153,6 +187,33 @@ const readHistory = (data: unknown): OrderHistoryEntry[] =>
         .filter((entry): entry is OrderHistoryEntry => entry !== null)
     : [];
 
+/** Coerces one API ledger row, dropping anything without a ledger id. */
+const normalizeLedger = (raw: unknown): OrderLedger | null => {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const record = raw as Record<string, unknown>;
+  const ledgerId = asText(record.ledgerId).trim();
+  if (!ledgerId) return null;
+
+  const date = asText(record.date) || asText(record.orderedAt);
+
+  return {
+    ledgerId,
+    date,
+    orderedAt: asText(record.orderedAt) || date,
+    supplierName: asText(record.supplierName),
+    supplierEmail: asText(record.supplierEmail),
+    itemCount: Math.max(0, toNumber(record.itemCount, 0)),
+    approxCost: Math.max(0, toNumber(record.approxCost, 0)),
+    status: asText(record.status) || 'ordered',
+  };
+};
+
+const readLedgers = (data: unknown): OrderLedger[] =>
+  Array.isArray(data)
+    ? data.map(normalizeLedger).filter((ledger): ledger is OrderLedger => ledger !== null)
+    : [];
+
 /** Reads every active line, newest first. */
 export const getBookEntries = async (): Promise<OrderBookEntry[]> => {
   try {
@@ -163,13 +224,40 @@ export const getBookEntries = async (): Promise<OrderBookEntry[]> => {
   }
 };
 
-/** Reads every order placed, newest first. */
-export const getBookHistory = async (): Promise<OrderHistoryEntry[]> => {
+/**
+ * Reads every order placed, newest first — the order summaries only.
+ *
+ * Each row shown in the history list comes from here; the medicines inside an
+ * order are deliberately not joined in (see `getLedgerItems`).
+ */
+export const getBookHistory = async (): Promise<OrderLedger[]> => {
   try {
-    const body = await request<OrderHistoryEntry[]>('/history');
-    return readHistory(body.data);
+    const body = await request<OrderLedger[]>('/history');
+    return readLedgers(body.data);
   } catch (error) {
     throw toApiError(error, 'Failed to load order history');
+  }
+};
+
+/**
+ * Loads one placed order with its medicines. Intended to run only when the user
+ * expands a history row, so the history list itself stays a single request.
+ */
+export const getLedgerItems = async (ledgerId: string): Promise<OrderLedgerDetail> => {
+  try {
+    const body = await request<{ ledger?: unknown; items?: unknown }>(
+      `/history/${encodeURIComponent(ledgerId)}`,
+    );
+
+    const data = body.data;
+    const ledger = normalizeLedger(data?.ledger);
+    if (!ledger) {
+      throw new Error('That order could not be found.');
+    }
+
+    return { ledger, items: readHistory(data?.items) };
+  } catch (error) {
+    throw toApiError(error, 'Failed to load the order details');
   }
 };
 
@@ -242,19 +330,20 @@ export const clearBookEntries = async (): Promise<OrderBookEntry[]> => {
 
 /** Moves the selected lines out of the book and into order history. */
 export const placeOrderBookEntries = async (
-  ids: string[],
+  input: PlaceOrderInput,
 ): Promise<PlaceOrderResult> => {
   try {
     const body = await request<PlaceOrderResult>('/place-order', {
       method: 'POST',
-      body: JSON.stringify({ ids }),
+      body: JSON.stringify(input),
     });
 
     const data = body.data;
     return {
       entries: readEntries(data?.entries),
-      history: readHistory(data?.history),
+      history: readLedgers(data?.history),
       placed: readHistory(data?.placed),
+      ledgerId: data?.ledgerId == null ? null : String(data.ledgerId),
     };
   } catch (error) {
     throw toApiError(error, 'Failed to mark the order book lines as ordered');
