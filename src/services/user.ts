@@ -203,3 +203,29 @@ export const loginUser = async (data: LoginPayload): Promise<AuthResponse> => {
     throw toApiError(error, 'Login failed');
   }
 };
+
+/**
+ * Signs in with Google using the ID token (`credential`) produced by the
+ * Google Identity Services button.
+ *
+ * The backend verifies the token, links or creates the account by email and
+ * opens the usual cookie session, so the response mirrors `loginUser`.
+ */
+export const loginWithGoogle = async (credential: string): Promise<AuthResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/google`, {
+      method: 'POST',
+      headers: getHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({ credential }),
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw toResponseError(response, body, 'Google sign-in failed');
+    }
+    return body;
+  } catch (error) {
+    throw toApiError(error, 'Google sign-in failed');
+  }
+};

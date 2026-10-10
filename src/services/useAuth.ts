@@ -7,6 +7,8 @@ export interface AuthContextType {
   user: UserProfile | null;
   status: AuthStatus;
   login: (credentials: LoginPayload) => Promise<void>;
+  /** Signs in with the Google ID token returned by Google Identity Services. */
+  loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (userData: RegisterPayload) => Promise<void>;
   forceLogout: () => void;
