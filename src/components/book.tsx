@@ -5,9 +5,8 @@
 // lookup the rest of the app uses (`getMedicineByName`), and picking a
 // suggestion auto-fills its composition (plus manufacturer and pack size).
 //
-// Persistence is client-side for now (see `services/book.ts`); the page itself
-// never touches storage APIs directly so the swap to a REST backend later is a
-// one-file change.
+// Persistence is handled by `services/book.ts`; the page itself never touches
+// the API directly.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
@@ -23,8 +22,10 @@ import {
   Modal,
   NumberInput,
   Paper,
+  SegmentedControl,
   SimpleGrid,
   Stack,
+  Table,
   Text,
   Textarea,
   TextInput,
@@ -35,15 +36,21 @@ import {
 import {
   IconAlertCircle,
   IconBook,
+  IconBuildingStore,
   IconCheck,
+  IconChevronRight,
   IconCircleCheck,
   IconDeviceFloppy,
   IconEdit,
   IconFlask,
   IconHistory,
+  IconMail,
+  IconMessageCircle,
   IconNotebook,
   IconPlus,
+  IconRefresh,
   IconTrash,
+  IconTruck,
   IconX,
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
@@ -53,6 +60,7 @@ import {
   clearBookEntries,
   getBookEntries,
   getBookHistory,
+  getLedgerItems,
   placeOrderBookEntries,
   removeBookEntry,
   updateBookEntry,
@@ -60,6 +68,7 @@ import {
   type OrderBookEntry,
   type OrderBookInput,
   type OrderHistoryEntry,
+  type OrderLedger,
 } from '../services/book';
 import styles from './book.module.css';
 
@@ -77,6 +86,8 @@ const formatCurrency = (value: number): string =>
 
 /** Renders a price, falling back to an em dash while it is still undecided. */
 const formatPrice = (value: number): string => (value > 0 ? formatCurrency(value) : '—');
+
+const isValidEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 /** Renders an ISO timestamp as a short local date (or blank when invalid). */
 const formatDate = (iso: string): string => {
@@ -106,16 +117,36 @@ const EMPTY_FORM: BookFormState = {
   remark: '',
 };
 
+/** Load state of one expandable order-history row. */
+type LedgerItemsState =
+  | { status: 'loading' }
+  | { status: 'loaded'; items: OrderHistoryEntry[] }
+  | { status: 'error'; message: string };
+
 export default function BookPage() {
   // --- Data ----------------------------------------------------------------
   const [entries, setEntries] = useState<OrderBookEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   // --- Selection & order history ------------------------------------------
-  const [history, setHistory] = useState<OrderHistoryEntry[]>([]);
+  const [history, setHistory] = useState<OrderLedger[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [view, setView] = useState<'list' | 'history'>('list');
   const [orderOpened, setOrderOpened] = useState(false);
+  const [supplierName, setSupplierName] = useState('');
+  const [supplierEmail, setSupplierEmail] = useState('');
+  const [supplierValidationAttempted, setSupplierValidationAttempted] = useState(false);
+
+  // --- Order history expansion --------------------------------------------
+  // The history list carries order summaries only. A ledger's medicines are
+  // fetched the first time its row is expanded and then kept for the life of
+  // the page, so repeated expand/collapse never re-hits the API. The two refs
+  // guard that cache: `loadedLedgersRef` marks the ledgers already fetched and
+  // `inflightLedgersRef` de-dupes concurrent requests for the same row.
+  const [expandedLedgers, setExpandedLedgers] = useState<Set<string>>(() => new Set());
+  const [ledgerItems, setLedgerItems] = useState<Record<string, LedgerItemsState>>({});
+  const loadedLedgersRef = useRef<Set<string>>(new Set());
+  const inflightLedgersRef = useRef<Set<string>>(new Set());
 
   // --- Form ----------------------------------------------------------------
   const [form, setForm] = useState<BookFormState>(EMPTY_FORM);
@@ -136,6 +167,7 @@ export default function BookPage() {
   const [clearOpened, setClearOpened] = useState(false);
 
   const formRef = useRef<HTMLDivElement>(null);
+  const medicineNameRef = useRef<HTMLInputElement | null>(null);
 
   /**
    * Debounced catalogue search. Created once; `cancel()` is called on unmount
@@ -174,6 +206,7 @@ export default function BookPage() {
         ]);
         if (!active) return;
         setEntries(nextEntries);
+        setSelectedIds(new Set(nextEntries.map((entry) => entry.id)));
         setHistory(nextHistory);
       } catch (error) {
         if (!active) return;
@@ -315,6 +348,13 @@ export default function BookPage() {
     },
     [runSearch]
   );
+
+  // Editing moves focus straight into the medicine name field so the user can
+  // retype or pick a different medicine without an extra click. `preventScroll`
+  // keeps the smooth scroll above in charge of positioning on small screens.
+  useEffect(() => {
+    if (editingId) medicineNameRef.current?.focus({ preventScroll: true });
+  }, [editingId]);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -466,26 +506,90 @@ export default function BookPage() {
     );
   }, [entries]);
 
+  /**
+   * Fetches one order's medicines, at most once.
+   *
+   * A ledger already loaded is served from state and a ledger already being
+   * fetched is left alone, so expanding a row repeatedly — or collapsing and
+   * re-expanding it — can never stack duplicate backend calls. A failed load is
+   * intentionally not cached, so re-expanding (or pressing Retry) tries again.
+   */
+  const loadLedgerItems = useCallback(async (ledgerId: string) => {
+    if (loadedLedgersRef.current.has(ledgerId) || inflightLedgersRef.current.has(ledgerId)) {
+      return;
+    }
+
+    inflightLedgersRef.current.add(ledgerId);
+    setLedgerItems((prev) => ({ ...prev, [ledgerId]: { status: 'loading' } }));
+
+    try {
+      const { items } = await getLedgerItems(ledgerId);
+      loadedLedgersRef.current.add(ledgerId);
+      setLedgerItems((prev) => ({ ...prev, [ledgerId]: { status: 'loaded', items } }));
+    } catch (error) {
+      setLedgerItems((prev) => ({
+        ...prev,
+        [ledgerId]: {
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Please try again.',
+        },
+      }));
+    } finally {
+      inflightLedgersRef.current.delete(ledgerId);
+    }
+  }, []);
+
+  const toggleLedger = useCallback(
+    (ledgerId: string) => {
+      setExpandedLedgers((prev) => {
+        const next = new Set(prev);
+        if (next.has(ledgerId)) next.delete(ledgerId);
+        else next.add(ledgerId);
+        return next;
+      });
+
+      // Safe on collapse too: it is a no-op once the row has been fetched.
+      void loadLedgerItems(ledgerId);
+    },
+    [loadLedgerItems]
+  );
+
+  const validateSupplierDetails = useCallback(() => {
+    setSupplierValidationAttempted(true);
+    const trimmedName = supplierName.trim();
+    const trimmedEmail = supplierEmail.trim();
+
+    return trimmedName.length > 0 && isValidEmail(trimmedEmail);
+  }, [supplierEmail, supplierName]);
+
+  const handleOrderOpen = useCallback(() => {
+    if (validateSupplierDetails()) setOrderOpened(true);
+  }, [validateSupplierDetails]);
+
   const handleOrderConfirm = useCallback(async () => {
+    if (!validateSupplierDetails()) return;
+
     setSaving(true);
     try {
-      const { entries: next, history: nextHistory, placed } = await placeOrderBookEntries([
-        ...selectedIds,
-      ]);
+      const { entries: next, history: nextHistory, placed } = await placeOrderBookEntries({
+        ids: [...selectedIds],
+        supplierName: supplierName.trim(),
+        supplierEmail: supplierEmail.trim(),
+      });
       setEntries(next);
       setHistory(nextHistory);
       setSelectedIds(new Set());
       setOrderOpened(false);
 
       notifications.show({
-        title: 'Marked as ordered',
-        message: `${placed.length} ${placed.length === 1 ? 'medicine was' : 'medicines were'} moved to your order history.`,
+        title: 'Order sent',
+        message: `${placed.length} ${placed.length === 1 ? 'medicine was' : 'medicines were'} sent to the supplier.`,
         color: 'teal',
         icon: <IconCheck size={16} />,
       });
     } catch (error) {
       notifications.show({
-        title: 'Could not mark as ordered',
+        title: 'Could not send order',
         message: error instanceof Error ? error.message : 'Please try again.',
         color: 'red',
         icon: <IconAlertCircle size={18} />,
@@ -493,7 +597,7 @@ export default function BookPage() {
     } finally {
       setSaving(false);
     }
-  }, [selectedIds]);
+  }, [selectedIds, supplierEmail, supplierName, validateSupplierDetails]);
 
   return (
     <Box>
@@ -558,8 +662,9 @@ export default function BookPage() {
                 </Group>
 
                 <Autocomplete
+                  ref={medicineNameRef}
                   label="Medicine name"
-                  placeholder="Start typing a medicine…"
+                  placeholder="Start typing medicine name"
                   required
                   value={form.name}
                   onChange={handleNameChange}
@@ -589,10 +694,10 @@ export default function BookPage() {
 
                 <TextInput
                   label="Composition"
-                  description="Auto-filled from the selected medicine"
+                  placeholder="Salt/Composition (optional)"
                   value={form.composition}
-                  placeholder="Pick a suggestion to auto-fill"
-                   onChange={(event) => {
+                  readOnly={Boolean(selectedRef.current)}
+                  onChange={(event) => {
                     const composition = event.currentTarget.value;
                     setForm((prev) => ({ ...prev, composition }));
                   }}
@@ -601,21 +706,23 @@ export default function BookPage() {
                 <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
                   <TextInput
                     label="Manufacturer"
+                    placeholder="Manufacturer (optional)"
                     value={form.manufacturer}
-                    placeholder="—"
-                     onChange={(event) => {
-                    const manufacturer = event.currentTarget.value;
-                    setForm((prev) => ({ ...prev, manufacturer }));
-                  }}
+                    readOnly={Boolean(selectedRef.current)}
+                    onChange={(event) => {
+                      const manufacturer = event.currentTarget.value;
+                      setForm((prev) => ({ ...prev, manufacturer }));
+                    }}
                   />
                   <TextInput
                     label="Pack size"
                     value={form.packSize}
-                    placeholder="—"
-                     onChange={(event) => {
-                    const packSize = event.currentTarget.value;
-                    setForm((prev) => ({ ...prev, packSize }));
-                  }}
+                    placeholder="Pack size (optional)"
+                    readOnly={Boolean(selectedRef.current)}
+                    onChange={(event) => {
+                      const packSize = event.currentTarget.value;
+                      setForm((prev) => ({ ...prev, packSize }));
+                    }}
                   />
                 </SimpleGrid>
 
@@ -649,7 +756,7 @@ export default function BookPage() {
 
                 <Textarea
                   label="Remark"
-                  placeholder="e.g. order after Diwali · check new batch"
+                  placeholder="Additional notes (optional)"
                   autosize
                   minRows={2}
                   maxRows={4}
@@ -676,6 +783,7 @@ export default function BookPage() {
                     type="submit"
                     color="blue"
                     loading={saving}
+                    onClick={() => medicineNameRef.current?.focus()}
                     leftSection={editingId ? <IconDeviceFloppy size={16} /> : <IconPlus size={16} />}
                     h={{ base: 44, sm: 40 }}
                   >
@@ -690,34 +798,121 @@ export default function BookPage() {
         {/* Planned medicines */}
         <Box w="100%" style={{ flex: 1, minWidth: 0 }}>
           <Paper p="lg" radius="lg" withBorder shadow="xs">
-            <Group justify="space-between" mb="md" gap="xs">
-              <Group gap="xs">
-                {view === 'history' ? (
-                  <IconHistory size={18} color="#228be6" />
-                ) : (
-                  <IconNotebook size={18} color="#228be6" />
-                )}
-                <Text fw={700}>{view === 'history' ? 'Order history' : 'Your list'}</Text>
-              </Group>
-              <Group gap="xs">
-                {view === 'list' && (
-                  <Text size="xs" c="dimmed">
-                    {totals.items} {totals.items === 1 ? 'line' : 'lines'} · {totals.quantity} units
-                  </Text>
-                )}
-                <Button
-                  variant="light"
-                  color="gray"
+            {/* ---- Panel toolbar: identity, view switch, supplier ------ */}
+            <div className={styles.toolbar}>
+              <div className={styles.toolbarHeader}>
+                <Group gap="sm" align="center" wrap="nowrap" className={styles.toolbarIdentity}>
+                  <span className={styles.toolbarIcon}>
+                    {view === 'history' ? <IconHistory size={18} /> : <IconNotebook size={18} />}
+                  </span>
+                  <div className={styles.toolbarTitle}>
+                    <Text fw={700} lh={1.2}>
+                      {view === 'history' ? 'Order history' : 'Your list'}
+                    </Text>
+                    <Text size="xs" c="dimmed" truncate>
+                      {view === 'history'
+                        ? `${history.length} ${history.length === 1 ? 'order' : 'orders'} placed`
+                        : entries.length === 0
+                          ? 'Nothing planned yet'
+                          : `${totals.items} ${totals.items === 1 ? 'item' : 'items'} · ${selectedIds.size} selected`}
+                    </Text>
+                  </div>
+                </Group>
+
+                <SegmentedControl
                   size="xs"
-                  leftSection={
-                    view === 'history' ? <IconNotebook size={14} /> : <IconHistory size={14} />
-                  }
-                  onClick={() => setView((prev) => (prev === 'history' ? 'list' : 'history'))}
-                >
-                  {view === 'history' ? 'Back to list' : `History (${history.length})`}
-                </Button>
-              </Group>
-            </Group>
+                  radius="md"
+                  value={view}
+                  onChange={(value) => setView(value as 'list' | 'history')}
+                  data={[
+                    {
+                      value: 'list',
+                      label: (
+                        <span className={styles.segmentLabel}>
+                          List
+                          <span className={styles.segmentCount}>{entries.length}</span>
+                        </span>
+                      ),
+                    },
+                    {
+                      value: 'history',
+                      label: (
+                        <span className={styles.segmentLabel}>
+                          History
+                          <span className={styles.segmentCount}>{history.length}</span>
+                        </span>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
+
+              {view === 'list' && entries.length > 0 && (
+                <div className={styles.supplierStrip}>
+                  <span className={styles.supplierCaption}>
+                    <IconTruck size={15} />
+                    <Text size="xs" fw={600}>
+                      Supplier
+                    </Text>
+                  </span>
+
+                  <TextInput
+                    className={styles.supplierField}
+                    size="xs"
+                    radius="md"
+                    placeholder="Supplier name"
+                    aria-label="Supplier name"
+                    leftSection={<IconBuildingStore size={14} />}
+                    leftSectionWidth={30}
+                    value={supplierName}
+                    onChange={(event) => setSupplierName(event.currentTarget.value)}
+                    required
+                    error={
+                      supplierValidationAttempted && !supplierName.trim()
+                        ? 'Supplier name is required.'
+                        : undefined
+                    }
+                  />
+                  <TextInput
+                    className={styles.supplierField}
+                    size="xs"
+                    radius="md"
+                    type="email"
+                    placeholder="Email"
+                    aria-label="Supplier email"
+                    leftSection={<IconMail size={14} />}
+                    leftSectionWidth={30}
+                    value={supplierEmail}
+                    onChange={(event) => setSupplierEmail(event.currentTarget.value)}
+                    required
+                    error={
+                      supplierValidationAttempted
+                        ? !supplierEmail.trim()
+                          ? 'Supplier email is required.'
+                          : !isValidEmail(supplierEmail.trim())
+                            ? 'Enter a valid email address.'
+                            : undefined
+                        : undefined
+                    }
+                  />
+
+                  <Button
+                    className={styles.supplierAction}
+                    size="xs"
+                    radius="md"
+                    variant="gradient"
+                    gradient={{ from: 'blue', to: 'cyan', deg: 135 }}
+                    leftSection={<IconCircleCheck size={14} />}
+                    onClick={handleOrderOpen}
+                    disabled={selectedIds.size === 0}
+                  >
+                    {selectedIds.size > 0
+                      ? `Send Order (${selectedIds.size})`
+                      : 'Send Order'}
+                  </Button>
+                </div>
+              )}
+            </div>
 
             {loading ? (
               <Box className={styles.empty} ta="center">
@@ -740,62 +935,132 @@ export default function BookPage() {
                     No orders placed yet
                   </Text>
                   <Text size="sm" c="dimmed" maw={360} mx="auto" mt={4}>
-                    Medicines you mark as ordered will appear here.
+                    Medicines you send orders for will appear here.
                   </Text>
                 </Box>
               ) : (
-                <Stack gap="sm">
-                  {history.map((entry) => (
-                    <Box key={entry.id} className={styles.entry}>
-                      <Box className={styles.entryMain}>
-                        <Group gap="xs" wrap="wrap">
-                          <Text fw={600} fz="sm">
-                            {entry.name}
-                          </Text>
-                          {entry.packSize && (
-                            <Badge size="xs" variant="light" color="blue" radius="sm">
-                              {entry.packSize}
+                <Box className={styles.scrollList}>
+                  <Stack gap="sm">
+                    {history.map((ledger) => {
+                      const expanded = expandedLedgers.has(ledger.ledgerId);
+                      const detail = ledgerItems[ledger.ledgerId];
+
+                      return (
+                        <Box key={ledger.ledgerId} className={styles.ledgerCard}>
+                          <button
+                            type="button"
+                            className={styles.ledgerToggle}
+                            onClick={() => toggleLedger(ledger.ledgerId)}
+                            aria-expanded={expanded}
+                            aria-label={`${expanded ? 'Collapse' : 'Expand'} order ${ledger.ledgerId}`}
+                          >
+                            <IconChevronRight
+                              size={16}
+                              className={styles.ledgerChevron}
+                              data-expanded={expanded || undefined}
+                            />
+
+                            <span className={styles.ledgerSummary}>
+                              <span className={styles.ledgerSupplier}>
+                                {ledger.supplierName || 'Supplier not recorded'}
+                              </span>
+                              <span className={styles.ledgerMeta}>
+                                {formatDate(ledger.orderedAt)} · {ledger.itemCount}{' '}
+                                {ledger.itemCount === 1 ? 'item' : 'items'} ·{' '}
+                                {formatCurrency(ledger.approxCost)}
+                              </span>
+                            </span>
+
+                            <Badge
+                              variant="light"
+                              color="blue"
+                              radius="sm"
+                              size="sm"
+                              className={styles.ledgerBadge}
+                            >
+                              {ledger.ledgerId}
                             </Badge>
+                          </button>
+
+                          {expanded && (
+                            <div className={styles.ledgerPanel}>
+                              {(!detail || detail.status === 'loading') && (
+                                <Group gap="xs" justify="center" py={6}>
+                                  <Loader size="xs" />
+                                  <Text size="xs" c="dimmed">
+                                    Loading medicines…
+                                  </Text>
+                                </Group>
+                              )}
+
+                              {detail?.status === 'error' && (
+                                <Group justify="space-between" gap="xs" wrap="nowrap">
+                                  <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+                                    <IconAlertCircle size={15} color="var(--mantine-color-red-6)" />
+                                    <Text size="xs" c="red.7">
+                                      {detail.message}
+                                    </Text>
+                                  </Group>
+                                  <Button
+                                    size="compact-xs"
+                                    variant="light"
+                                    color="red"
+                                    leftSection={<IconRefresh size={13} />}
+                                    onClick={() => void loadLedgerItems(ledger.ledgerId)}
+                                  >
+                                    Retry
+                                  </Button>
+                                </Group>
+                              )}
+
+                              {detail?.status === 'loaded' && detail.items.length === 0 && (
+                                <Text size="xs" c="dimmed" ta="center" py={6}>
+                                  No medicines recorded for this order.
+                                </Text>
+                              )}
+
+                              {detail?.status === 'loaded' && detail.items.length > 0 && (
+                                <Box className={styles.ledgerTableScroll}>
+                                  <Table
+                                    className={styles.ledgerTable}
+                                    fz="sm"
+                                    horizontalSpacing="sm"
+                                    verticalSpacing={4}
+                                  >
+                                    <Table.Thead>
+                                      <Table.Tr>
+                                        <Table.Th>Medicine</Table.Th>
+                                        <Table.Th>Qty × price</Table.Th>
+                                        <Table.Th ta="right">Est. total</Table.Th>
+                                      </Table.Tr>
+                                    </Table.Thead>
+                                    <Table.Tbody>
+                                      {detail.items.map((item) => (
+                                        <Table.Tr key={item.id}>
+                                          <Table.Td>
+                                            <Text fw={600} fz="sm">{item.name}</Text>
+                                          </Table.Td>
+                                          <Table.Td>
+                                            {item.quantity} × {formatPrice(item.price)}
+                                          </Table.Td>
+                                          <Table.Td ta="right">
+                                            <Text fw={700} c="blue.7" fz="sm">
+                                              {formatPrice(item.quantity * item.price)}
+                                            </Text>
+                                          </Table.Td>
+                                        </Table.Tr>
+                                      ))}
+                                    </Table.Tbody>
+                                  </Table>
+                                </Box>
+                              )}
+                            </div>
                           )}
-                          {entry.manufacturer && (
-                            <Badge size="xs" variant="light" color="cyan" radius="sm">
-                              {entry.manufacturer}
-                            </Badge>
-                          )}
-                        </Group>
-
-                        {entry.composition && (
-                          <Group gap={6} mt={6} wrap="nowrap" align="center">
-                            <IconFlask size={13} color="#0891b2" style={{ flexShrink: 0 }} />
-                            <Text size="xs" c="dimmed" className={styles.truncate}>
-                              {entry.composition}
-                            </Text>
-                          </Group>
-                        )}
-                      </Box>
-
-                      <Group className={styles.entryAside} gap={12} wrap="wrap">
-                        <Stack gap={0} miw={84}>
-                          <Text size="xs" c="dimmed">
-                            Qty × price
-                          </Text>
-                          <Text size="sm" fw={600}>
-                            {entry.quantity} × {formatPrice(entry.price)}
-                          </Text>
-                        </Stack>
-
-                        <Stack gap={0} miw={92}>
-                          <Text size="xs" c="dimmed">
-                            Ordered on
-                          </Text>
-                          <Text size="sm" fw={600}>
-                            {formatDate(entry.orderedAt)}
-                          </Text>
-                        </Stack>
-                      </Group>
-                    </Box>
-                  ))}
-                </Stack>
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+                </Box>
               )
             ) : entries.length === 0 ? (
               <Box className={styles.empty} ta="center">
@@ -812,7 +1077,7 @@ export default function BookPage() {
                 </Text>
               </Box>
             ) : (
-              <Stack gap="sm">
+              <Stack gap="sm" className={styles.scrollList}>
                 <Group justify="space-between" gap="xs">
                   <Checkbox
                     label={allSelected ? 'Deselect all' : 'Select all'}
@@ -821,16 +1086,7 @@ export default function BookPage() {
                     indeterminate={someSelected}
                     onChange={toggleSelectAll}
                   />
-                  {selectedIds.size > 0 && (
-                    <Button
-                      size="xs"
-                      color="green"
-                      leftSection={<IconCircleCheck size={14} />}
-                      onClick={() => setOrderOpened(true)}
-                    >
-                      Mark as ordered ({selectedIds.size})
-                    </Button>
-                  )}
+
                 </Group>
 
                 {entries.map((entry) => (
@@ -860,19 +1116,44 @@ export default function BookPage() {
                             )}
                           </Group>
 
-                          {entry.composition && (
-                            <Group gap={6} mt={6} wrap="nowrap" align="center">
-                              <IconFlask size={13} color="#0891b2" style={{ flexShrink: 0 }} />
-                              <Text size="xs" c="dimmed" className={styles.truncate}>
-                                {entry.composition}
-                              </Text>
-                            </Group>
-                          )}
 
-                          {entry.remark && (
-                            <Text size="xs" c="dimmed" fs="italic" mt={6} className={styles.remark}>
-                              “{entry.remark}”
-                            </Text>
+                          {(entry.composition || entry.remark) && (
+                            <Group gap={12} mt={6} wrap="nowrap" align="flex-start">
+
+                              {/* Composition Field */}
+                              {entry.composition && (
+                                <Group gap={6} wrap="nowrap" align="center" style={{ flex: '0 1 auto', minWidth: 0 }}>
+                                  <IconFlask size={14} color="#0891b2" style={{ flexShrink: 0 }} />
+                                  <Text size="xs" c="dimmed" fw={500} className={styles.truncate}>
+                                    {entry.composition}
+                                  </Text>
+                                </Group>
+                              )}
+
+                              {/* Simple Separator (Only shows if BOTH fields exist) */}
+                              {entry.composition && entry.remark && (
+                                <Text size="xs" c="gray.5" style={{ flexShrink: 0 }}>
+                                  |
+                                </Text>
+                              )}
+
+                              {/* Remark Field */}
+                              {entry.remark && (
+                                <Group gap={6} wrap="nowrap" align="flex-start" style={{ flex: 1, minWidth: 0 }}>
+                                  <IconMessageCircle size={14} color="#8b5cf6" style={{ flexShrink: 0, marginTop: 2 }} />
+                                  <Text
+                                    size="xs"
+                                    c="dimmed"
+                                    fs="italic"
+                                    className={styles.remark}
+                                    style={{ flex: 1, minWidth: 0 }}
+                                  >
+                                    “{entry.remark}”
+                                  </Text>
+                                </Group>
+                              )}
+
+                            </Group>
                           )}
                         </Box>
                       </Group>
@@ -1022,15 +1303,14 @@ export default function BookPage() {
       <Modal
         opened={orderOpened}
         onClose={() => setOrderOpened(false)}
-        title={<Text fw={700}>Mark as ordered?</Text>}
+        title={<Text fw={700}>Send Order?</Text>}
         centered
         size="sm"
         radius="md"
       >
         <Stack gap="lg">
           <Text size="sm">
-            Move {selectedIds.size} selected {selectedIds.size === 1 ? 'medicine' : 'medicines'} to
-            your order history? They will be removed from your current list.
+           Supplier will be alerted via mail for the selected items.
           </Text>
           <Flex direction={{ base: 'column-reverse', xs: 'row' }} justify="flex-end" gap="sm">
             <Button
@@ -1049,8 +1329,7 @@ export default function BookPage() {
               h={{ base: 44, sm: 36 }}
               w={{ base: '100%', sm: 'auto' }}
             >
-              Mark as ordered
-            </Button>
+Send            </Button>
           </Flex>
         </Stack>
       </Modal>
