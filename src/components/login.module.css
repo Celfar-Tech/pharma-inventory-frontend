@@ -239,6 +239,30 @@
   color: #475569;
 }
 
+/* ===== Uniform action buttons =====
+   Mirrors the Google Sign-In button ("large" + "pill"): 40px tall with a fully
+   rounded shape. Every Mantine Button inside the auth card adopts the same
+   height, radius, font size and weight so all actions share one consistent size. */
+.authCard :global(.mantine-Button-root) {
+  height: 40px;
+  min-height: 40px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  padding-inline: 20px;
+}
+
+/* Google renders its button as an <iframe> and pins it with an inline
+   `margin: -2px -10px`, so it sits hard against the left edge. Rather than
+   fighting that inline style, we flex-centre the wrapper created by
+   @react-oauth/google: the button keeps its natural width and is centred in
+   the column, lining up with the full-width buttons above and below. */
+.googleButton {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 960px) {
   .leftPanel {

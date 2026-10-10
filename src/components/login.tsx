@@ -1,4 +1,5 @@
 import { useState, useCallback, type ChangeEvent, useEffect } from 'react';
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import {
   Alert,
   TextInput,
@@ -18,6 +19,7 @@ import {
   Progress,
   Badge,
   SimpleGrid,
+  Divider,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import {
@@ -181,8 +183,7 @@ function PasswordFeedback({ password }: { password: string }) {
 }
 
 export function LoginPage() {
-  const { login } = useAuth();
-  const { register } = useAuth();
+  const { login, register, loginWithGoogle } = useAuth();
   const [type, setType] = useState<AuthMode>('login');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -383,6 +384,38 @@ export function LoginPage() {
     },
     [form, login, navigate, otpToken, register, type],
   );
+
+  // Google Identity Services hands back a signed ID token which the API verifies
+  // before opening the session cookie, so the rest of the flow matches `login`.
+  const handleGoogleSuccess = useCallback(
+    async (credentialResponse: CredentialResponse) => {
+      const credential = credentialResponse.credential;
+      if (!credential) {
+        setFormError('Google did not return a credential. Please try again.');
+        return;
+      }
+
+      setLoading(true);
+      setSuccessMsg('');
+      setFormError('');
+
+      try {
+        await loginWithGoogle(credential);
+        navigate(AUTHENTICATED_HOME);
+      } catch (error) {
+        setFormError(
+          error instanceof Error ? error.message : 'Google sign-in failed. Please try again.',
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loginWithGoogle, navigate],
+  );
+
+  const handleGoogleError = useCallback(() => {
+    setFormError('Google sign-in was cancelled or failed. Please try again.');
+  }, []);
 
   const toggleAuthMode = useCallback(() => {
     form.reset();
@@ -627,6 +660,26 @@ export function LoginPage() {
                           ? 'Update Password'
                           : 'Send Verification Code'}
                 </Button>
+              )}
+
+              {(type === 'login' || type === 'register_email') && (
+                <>
+                  <Divider
+                    label="or continue with Google"
+                    labelPosition="center"
+                    my={2}
+                  />
+                  <Box w="100%">
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={handleGoogleError}
+                      shape="pill"
+                      size="large"
+                      text={type === 'login' ? 'signin_with' : 'signup_with'}
+                      containerProps={{ className: classes.googleButton, style: { width: '100%' } }}
+                    />
+                  </Box>
+                </>
               )}
 
               {type === 'login' && (

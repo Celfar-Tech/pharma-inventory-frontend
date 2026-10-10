@@ -102,7 +102,7 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <GoogleOAuthProvider clientId="76787419088-nv3nspbilnd3gu6dnai2vposgf25afdd.apps.googleusercontent.com">
+      <GoogleOAuthProvider clientId="423042807905-23145tagvsevp6621bgtu465d2ecp2pd.apps.googleusercontent.com">
         <MantineProvider defaultColorScheme="light">
           
           <Routes>

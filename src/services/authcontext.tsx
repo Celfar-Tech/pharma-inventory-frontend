@@ -4,6 +4,7 @@ import {
   logoutUser,
   finalizeRegistration,
   getProfile,
+  loginWithGoogle as loginWithGoogleRequest,
 } from './user';
 import type {
   UserProfile,
@@ -93,12 +94,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await finalizeRegistration(userData);
   };
 
+  // Mirrors `login`: the server has already opened the cookie session, so we
+  // only need to adopt the returned profile. `status` is intentionally left
+  // untouched — see the note on `login` above.
+  const loginWithGoogle = async (credential: string) => {
+    try {
+      const response = await loginWithGoogleRequest(credential);
+      if (response && response.user) {
+        setUser(response.user);
+        setStatus('authenticated');
+      } else {
+        forceLogout();
+        throw new Error(response?.error || 'Google sign-in failed');
+      }
+    } catch (error) {
+      forceLogout();
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
         status,
         login,
+        loginWithGoogle,
         logout,
         register,
         forceLogout,
