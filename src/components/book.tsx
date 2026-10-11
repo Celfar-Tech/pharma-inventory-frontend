@@ -130,6 +130,8 @@ export default function BookPage() {
 
   // --- Selection & order history ------------------------------------------
   const [history, setHistory] = useState<OrderLedger[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const historyLoadedRef = useRef(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [view, setView] = useState<'list' | 'history'>('list');
   const [orderOpened, setOrderOpened] = useState(false);
@@ -194,20 +196,16 @@ export default function BookPage() {
 
   useEffect(() => () => runSearch.cancel(), [runSearch]);
 
-  // Load the book and its history from the API once on mount.
+  // Load only the book on mount; history is fetched when its tab is opened.
   useEffect(() => {
     let active = true;
 
     (async () => {
       try {
-        const [nextEntries, nextHistory] = await Promise.all([
-          getBookEntries(),
-          getBookHistory(),
-        ]);
+        const nextEntries = await getBookEntries();
         if (!active) return;
         setEntries(nextEntries);
         setSelectedIds(new Set(nextEntries.map((entry) => entry.id)));
-        setHistory(nextHistory);
       } catch (error) {
         if (!active) return;
         notifications.show({
@@ -224,6 +222,27 @@ export default function BookPage() {
     return () => {
       active = false;
     };
+  }, []);
+
+  const handleViewChange = useCallback((value: string) => {
+    const nextView = value as 'list' | 'history';
+    setView(nextView);
+    if (nextView !== 'history' || historyLoadedRef.current) return;
+
+    historyLoadedRef.current = true;
+    setHistoryLoading(true);
+    getBookHistory()
+      .then(setHistory)
+      .catch((error) => {
+        historyLoadedRef.current = false;
+        notifications.show({
+          title: 'Could not load order history',
+          message: error instanceof Error ? error.message : 'Please try again.',
+          color: 'red',
+          icon: <IconAlertCircle size={18} />,
+        });
+      })
+      .finally(() => setHistoryLoading(false));
   }, []);
 
   // --- Derived -------------------------------------------------------------
@@ -578,6 +597,7 @@ export default function BookPage() {
       });
       setEntries(next);
       setHistory(nextHistory);
+      historyLoadedRef.current = true;
       setSelectedIds(new Set());
       setOrderOpened(false);
 
@@ -823,7 +843,7 @@ export default function BookPage() {
                   size="xs"
                   radius="md"
                   value={view}
-                  onChange={(value) => setView(value as 'list' | 'history')}
+                  onChange={handleViewChange}
                   data={[
                     {
                       value: 'list',
@@ -924,7 +944,16 @@ export default function BookPage() {
                 </Text>
               </Box>
             ) : view === 'history' ? (
-              history.length === 0 ? (
+              historyLoading ? (
+                <Box className={styles.empty} ta="center">
+                  <Flex justify="center">
+                    <Loader size="md" />
+                  </Flex>
+                  <Text size="sm" c="dimmed" mt="sm">
+                    Loading order history…
+                  </Text>
+                </Box>
+              ) : history.length === 0 ? (
                 <Box className={styles.empty} ta="center">
                   <Flex justify="center">
                     <ThemeIcon variant="light" color="blue" size={54} radius="xl">
