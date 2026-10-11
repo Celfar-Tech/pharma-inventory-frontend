@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1440" viewBox="0 0 2560 1440">
+  <defs>
+    <!-- Brand gradient, lifted from login.module.css -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0"    stop-color="#0c4a6e"/>
+      <stop offset="0.34" stop-color="#075985"/>
+      <stop offset="1"    stop-color="#0f172a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.16" cy="0.04" r="0.78">
+      <stop offset="0"    stop-color="#38bdf8" stop-opacity="0.42"/>
+      <stop offset="0.45" stop-color="#0284c7" stop-opacity="0.20"/>
+      <stop offset="1"    stop-color="#0284c7" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M80 0H0V80" fill="none" stroke="#ffffff" stroke-opacity="0.05" stroke-width="1"/>
+    </pattern>
+    <pattern id="crosses" width="230" height="230" patternUnits="userSpaceOnUse" patternTransform="rotate(-12)">
+      <path d="M115 96v38M96 115h38" stroke="#ffffff" stroke-opacity="0.055"
+            stroke-width="7" stroke-linecap="round"/>
+    </pattern>
+  </defs>
+
+  <!-- Background layers -->
+  <rect width="2560" height="1440" fill="url(#bg)"/>
+  <rect width="2560" height="1440" fill="url(#glow)"/>
+  <rect width="2560" height="1440" fill="url(#grid)"/>
+  <rect width="2560" height="1440" fill="url(#crosses)"/>
+
+  <!-- Centered lockup — entirely inside the 1546 × 423 safe area -->
+  <g text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif">
+    <!-- Mark: blue rounded square + white cross -->
+    <g transform="translate(1280 545)">
+      <rect x="-55" y="0" width="110" height="110" rx="28" fill="#228be6"/>
+      <path d="M0 30v50M-25 55h50" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
+    </g>
+
+    <!-- Two-tone wordmark, matching the sidebar -->
+    <text x="1280" y="800" font-size="150" font-weight="800" letter-spacing="-2">
+      <tspan fill="#38bdf8">Pharma</tspan><tspan fill="#ffffff">Connect</tspan>
+    </text>
+
+    <!-- Accent rule -->
+    <rect x="1070" y="846" width="420" height="3" rx="1.5" fill="#38bdf8" opacity="0.55"/>
+
+    <!-- Tagline -->
+    <text x="1280" y="908" font-size="42" font-weight="500" letter-spacing="6" fill="#bae6fd">
+      PHARMACY SOFTWARE, BUILT AT THE COUNTER
+    </text>
+  </g>
+
+  <!-- OPTIONAL: uncomment to preview the safe area while you design
+  <rect x="507" y="508" width="1546" height="423" fill="none" stroke="#ff00aa" stroke-width="3"/>
+  -->
+</svg>
