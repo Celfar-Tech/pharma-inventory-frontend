@@ -173,13 +173,12 @@
   }
 }
 
-/* Phones: the supplier row becomes a compact grid — the caption heads the
-   block, the two fields share a row when they fit (and stack when they do not),
-   and the primary action keeps a full-width, easy-to-hit target. */
+/* Phones: supplier fields stack at full width and the primary action remains
+   a full-width, easy-to-hit target. */
 @media (max-width: 40em) {
   .supplierStrip {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
     gap: 10px;
   }
@@ -189,6 +188,7 @@
   }
 
   .supplierField {
+    width: 100%;
     max-width: none;
   }
 
@@ -203,8 +203,8 @@
  * Scrollable list body
  * The list/history panels keep a fixed ceiling so a long book never pushes the
  * page (or the supplier strip) off screen. `overflow-y: auto` turns the panel
- * body into its own scroll region, and `overscroll-behavior: contain` stops the
- * page behind it from scrolling once the inner list reaches its end.
+ * body into its own scroll region. The order list contains scroll at its end;
+ * history allows it to chain to the page.
  * ------------------------------------------------------------------------- */
 .scrollList {
   max-height: min(62vh, 620px);
@@ -213,6 +213,10 @@
   padding-right: 4px;
   scrollbar-width: thin;
   scrollbar-color: var(--mantine-color-gray-4) transparent;
+}
+
+.historyScrollList {
+  overscroll-behavior-y: auto;
 }
 
 .scrollList::-webkit-scrollbar {
