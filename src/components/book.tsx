@@ -149,6 +149,13 @@ export default function BookPage() {
   const [ledgerItems, setLedgerItems] = useState<Record<string, LedgerItemsState>>({});
   const loadedLedgersRef = useRef<Set<string>>(new Set());
   const inflightLedgersRef = useRef<Set<string>>(new Set());
+  // Card nodes keyed by ledger id, so a freshly expanded order can be brought
+  // fully into view instead of opening with its panel half below the fold.
+  const ledgerCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const setLedgerCardRef = useCallback((ledgerId: string, node: HTMLDivElement | null) => {
+    if (node) ledgerCardRefs.current.set(ledgerId, node);
+    else ledgerCardRefs.current.delete(ledgerId);
+  }, []);
 
   // --- Form ----------------------------------------------------------------
   const [form, setForm] = useState<BookFormState>(EMPTY_FORM);
@@ -560,6 +567,8 @@ export default function BookPage() {
 
   const toggleLedger = useCallback(
     (ledgerId: string) => {
+      const expanding = !expandedLedgers.has(ledgerId);
+
       setExpandedLedgers((prev) => {
         const next = new Set(prev);
         if (next.has(ledgerId)) next.delete(ledgerId);
@@ -569,8 +578,21 @@ export default function BookPage() {
 
       // Safe on collapse too: it is a no-op once the row has been fetched.
       void loadLedgerItems(ledgerId);
+
+      // Expanding opens a panel below the header. Pull the whole card into view
+      // on the next frame, once React has committed that panel, so the content
+      // the user just revealed is not left hanging off the bottom of the list.
+      // `block: 'nearest'` keeps the movement minimal and does nothing when the
+      // card already fits.
+      if (expanding) {
+        requestAnimationFrame(() => {
+          ledgerCardRefs.current
+            .get(ledgerId)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+      }
     },
-    [loadLedgerItems]
+    [expandedLedgers, loadLedgerItems]
   );
 
   const validateSupplierDetails = useCallback(() => {
@@ -850,7 +872,9 @@ export default function BookPage() {
                       label: (
                         <span className={styles.segmentLabel}>
                           List
-                          <span className={styles.segmentCount}>{entries.length}</span>
+                          {entries.length > 0 && (
+                            <span className={styles.segmentCount}>{entries.length}</span>
+                          )}  
                         </span>
                       ),
                     },
@@ -859,7 +883,9 @@ export default function BookPage() {
                       label: (
                         <span className={styles.segmentLabel}>
                           History
-                          <span className={styles.segmentCount}>{history.length}</span>
+                          {history.length > 0 && (
+                            <span className={styles.segmentCount}>{history.length}</span>
+                          )}
                         </span>
                       ),
                     },
@@ -872,7 +898,7 @@ export default function BookPage() {
                   <span className={styles.supplierCaption}>
                     <IconTruck size={15} />
                     <Text size="xs" fw={600}>
-                      Supplier
+                      Supplier Information
                     </Text>
                   </span>
 
@@ -898,7 +924,7 @@ export default function BookPage() {
                     size="xs"
                     radius="md"
                     type="email"
-                    placeholder="Email"
+                    placeholder="Suppler Email"
                     aria-label="Supplier email"
                     leftSection={<IconMail size={14} />}
                     leftSectionWidth={30}
@@ -968,14 +994,18 @@ export default function BookPage() {
                   </Text>
                 </Box>
               ) : (
-                <Box className={styles.scrollList}>
+                <Box className={`${styles.scrollList} ${styles.historyScrollList}`}>
                   <Stack gap="sm">
                     {history.map((ledger) => {
                       const expanded = expandedLedgers.has(ledger.ledgerId);
                       const detail = ledgerItems[ledger.ledgerId];
 
                       return (
-                        <Box key={ledger.ledgerId} className={styles.ledgerCard}>
+                        <Box
+                          key={ledger.ledgerId}
+                          ref={(node) => setLedgerCardRef(ledger.ledgerId, node)}
+                          className={styles.ledgerCard}
+                        >
                           <button
                             type="button"
                             className={styles.ledgerToggle}
