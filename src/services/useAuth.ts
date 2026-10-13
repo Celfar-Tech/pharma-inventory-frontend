@@ -12,6 +12,13 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   register: (userData: RegisterPayload) => Promise<void>;
   forceLogout: () => void;
+  /**
+   * Merges fields into the cached profile without touching `status`.
+   *
+   * Used after a successful profile update so the header, hero and sidebar
+   * immediately show the new values instead of the stale login snapshot.
+   */
+  updateUser: (patch: Partial<UserProfile>) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

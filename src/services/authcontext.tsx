@@ -24,6 +24,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setStatus('unauthenticated');
   }, []);
 
+  // Merges a partial profile into the cached user. `status` is deliberately
+  // left alone: knowing whether a session exists has not changed, only which
+  // fields that session carries.
+  const updateUser = useCallback((patch: Partial<UserProfile>) => {
+    setUser((previous) => (previous ? { ...previous, ...patch } : previous));
+  }, []);
+
   // Restore the session on app load from the server-side cookie session.
   useEffect(() => {
     let active = true;
@@ -123,6 +130,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         logout,
         register,
         forceLogout,
+        updateUser,
       }}
     >
       {children}

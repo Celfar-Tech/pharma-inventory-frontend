@@ -10,7 +10,38 @@ export interface UserProfile {
   last_name: string | null;
   phone_number: string | null;
   license_number: string | null;
+  /** ISO date (`YYYY-MM-DD`), as returned by the backend. */
+  date_of_birth?: string | null;
+  gender?: string | null;
   status: string;
+}
+
+/**
+ * Body for `PUT /user/update-user-details`.
+ *
+ * `email` is the lookup key — the backend identifies the account by it — so it
+ * is always sent and never edited in the form.
+ *
+ * `password` is optional on purpose: it is only included when the user is
+ * actually rotating their password, so an untouched form can never blank an
+ * existing credential.
+ */
+export interface UpdateUserDetailsPayload {
+  email: string;
+  first_name?: string | null;
+  phone_number?: string | null;
+  date_of_birth?: string | null;
+  gender?: string | null;
+  license_number?: string | null;
+  password?: string;
+}
+
+export interface UpdateUserDetailsResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  /** Present when the API echoes the updated account; otherwise the client merges locally. */
+  user?: UserProfile;
 }
 
 export interface LoginPayload {
@@ -182,6 +213,35 @@ export const getProfile = async (): Promise<UserProfile> => {
     return data.user as UserProfile;
   } catch (error) {
     throw toApiError(error, 'Failed to load profile');
+  }
+};
+
+/**
+ * Updates the signed-in user's details.
+ *
+ * The account is resolved by `email` server-side and every other field is
+ * treated as a patch, so callers only need to send what actually changed.
+ * Omit `password` unless the user is changing it — sending an empty value would
+ * overwrite the stored hash.
+ */
+export const updateUserDetails = async (
+  payload: UpdateUserDetailsPayload,
+): Promise<UpdateUserDetailsResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/update-user-details`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw toResponseError(response, body, 'Failed to update your details');
+    }
+    return body;
+  } catch (error) {
+    throw toApiError(error, 'Failed to update your details');
   }
 };
 
