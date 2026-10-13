@@ -71,6 +71,11 @@ const PAGE_META: Record<string, PageMeta> = {
     subtitle: 'Search, reprint and manage past bills',
     icon: Receipt,
   },
+  '/profile': {
+    title: 'My Profile',
+    subtitle: 'Your identity, contact details and password',
+    icon: User,
+  },
 };
 
 /** Shown for any path without an explicit entry. */
@@ -315,7 +320,9 @@ export default function Header({ mobileNavOpened, onBurgerClick }: HeaderProps) 
             <Menu.Label>
               {username} · {role}
             </Menu.Label>
-            <Menu.Item leftSection={<User size={14} />}>My Profile</Menu.Item>
+            <Menu.Item leftSection={<User size={14} />} onClick={() => navigate('/profile')}>
+              My Profile
+            </Menu.Item>
             <Menu.Item leftSection={<Settings size={14} />}>System Settings</Menu.Item>
             <Menu.Divider />
             <Menu.Item color="red" leftSection={<LogOut size={14} />} onClick={handleClearSession}>

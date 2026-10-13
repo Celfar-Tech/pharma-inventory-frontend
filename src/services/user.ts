@@ -1,5 +1,5 @@
 // User authentication and account management API calls
-import { API_BASE_URL, getHeaders, toApiError, toResponseError } from './apiClient';
+import { API_BASE_URL, ApiError, getHeaders, toApiError, toResponseError } from './apiClient';
 
 export interface UserProfile {
   id: string;
@@ -10,7 +10,37 @@ export interface UserProfile {
   last_name: string | null;
   phone_number: string | null;
   license_number: string | null;
+  /** ISO date (`YYYY-MM-DD`), as returned by the backend. */
+  date_of_birth?: string | null;
+  gender?: string | null;
   status: string;
+}
+
+/**
+ * Body for `PUT /user/update-user-details`.
+ *
+ * `email` is the lookup key — the backend identifies the account by it — so it
+ * is always sent and never edited in the form.
+ *
+ * `password` is optional on purpose: it is only included when the user is
+ * actually rotating their password, so an untouched form can never blank an
+ * existing credential.
+ */
+export interface UpdateUserDetailsPayload {
+  email: string;
+  first_name?: string | null;
+  phone_number?: string | null;
+  date_of_birth?: string | null;
+  gender?: string | null;
+  license_number?: string | null;
+  password?: string;
+}
+
+export interface UpdateUserDetailsResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  user?: UserProfile;
 }
 
 export interface LoginPayload {
@@ -182,6 +212,76 @@ export const getProfile = async (): Promise<UserProfile> => {
     return data.user as UserProfile;
   } catch (error) {
     throw toApiError(error, 'Failed to load profile');
+  }
+};
+
+/**
+ * Reads the signed-in user's details from `GET /user/get-user-details`.
+ *
+ * The backend answers this endpoint with `{ success, data: profile }` — note
+ * `data`, not `user` (unlike `GET /user/profile`, which uses `user`). Reading
+ * only `user` here resolved to `undefined`, so the profile page silently kept
+ * the slimmer login snapshot and never showed `date_of_birth` or `gender`.
+ * `user` is still accepted as a fallback for deployments that echo it.
+ */
+export const getUserDetails = async (): Promise<UserProfile> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/get-user-details`, {
+      method: 'GET',
+      headers: getHeaders(),
+      credentials: 'include',
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw toResponseError(response, data, 'Failed to load user details');
+
+    const profile = (data.data ?? data.user) as UserProfile | undefined;
+    if (!profile) throw new ApiError('Failed to load user details', response.status);
+    return profile;
+  } catch (error) {
+    throw toApiError(error, 'Failed to load user details');
+  }
+};
+
+/**
+ * Updates the signed-in user's details.
+ *
+ * The account is resolved by `email` server-side and every other field is
+ * treated as a patch, so callers only need to send what actually changed.
+ * Omit `password` unless the user is changing it — sending an empty value would
+ * overwrite the stored hash.
+ */
+export const updateUserDetails = async (
+  payload: UpdateUserDetailsPayload,
+): Promise<UpdateUserDetailsResponse> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/update-user-details`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body.success === false) {
+      // Keep the HTTP status, `code` and `field` on the error: the profile form
+      // uses them to pin a duplicate value to the offending input and to show
+      // the API's specific reason (`error`/`errors`) instead of the generic
+      // `message` envelope.
+      throw toResponseError(
+        response,
+        body,
+        'Failed to update your details',
+      );
+    }
+
+    // This endpoint also returns the updated account as `{ success, message, data }`.
+    // Normalise it to `user` so the profile cards can refresh from the server's
+    // copy instead of falling back to the values that were submitted.
+    const updatedUser = (body.data ?? body.user) as UserProfile | undefined;
+    return { ...body, user: updatedUser };
+  } catch (error) {
+    throw toApiError(error, 'Failed to update your details');
   }
 };
 

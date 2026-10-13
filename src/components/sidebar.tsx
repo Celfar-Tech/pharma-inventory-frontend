@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  UserRound,
   X,
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router';
@@ -43,6 +44,7 @@ const LINKS_DATA = [
   { id: 'book', label: 'Order Book', icon: BookMarked, path: '/book' },
   { id: 'billing', label: 'New Billing', icon: ShoppingCart, path: '/billing' },
   { id: 'invoices', label: 'Invoices', icon: Receipt, path: '/invoices' },
+  { id: 'profile', label: 'My Profile', icon: UserRound, path: '/profile' },
 ];
 
 export default function Sidebar({
