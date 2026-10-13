@@ -1,0 +1,464 @@
+.page {
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+.eyebrow {
+  color: var(--mantine-color-blue-7);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.pageTitle {
+  margin-top: 4px;
+  color: var(--mantine-color-gray-9);
+  font-size: clamp(26px, 3vw, 34px);
+  letter-spacing: -0.04em;
+}
+
+.hero,
+.panel {
+  overflow: hidden;
+  border: 1px solid var(--mantine-color-gray-2);
+  background: var(--mantine-color-white);
+  box-shadow: 0 10px 30px rgba(29, 54, 86, 0.045);
+}
+
+.cover {
+  position: relative;
+  display: flex;
+  min-height: 174px;
+  align-items: flex-start;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: 24px 28px;
+  color: white;
+  background:
+    radial-gradient(ellipse at 76% 20%, rgba(83, 210, 223, 0.38), transparent 33%),
+    radial-gradient(ellipse at 15% 110%, rgba(86, 117, 255, 0.54), transparent 42%),
+    linear-gradient(116deg, #102a56 0%, #174b83 52%, #117c9d 100%);
+}
+
+.coverOrb {
+  position: absolute;
+  top: -96px;
+  right: 19%;
+  width: 280px;
+  height: 280px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 28px rgba(255, 255, 255, 0.035),
+    0 0 0 58px rgba(255, 255, 255, 0.035);
+}
+
+.coverLines {
+  position: absolute;
+  right: -35px;
+  bottom: -80px;
+  width: 52%;
+  height: 150px;
+  transform: rotate(-18deg);
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  box-shadow:
+    0 -12px 0 -11px rgba(255, 255, 255, 0.2),
+    0 -25px 0 -24px rgba(255, 255, 255, 0.17),
+    0 -39px 0 -38px rgba(255, 255, 255, 0.14);
+}
+
+.coverLabel,
+.statusBadge {
+  position: relative;
+  z-index: 1;
+}
+
+.coverLabel {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.82);
+  letter-spacing: 0.09em;
+}
+
+.statusBadge {
+  background: rgba(255, 255, 255, 0.94);
+  text-transform: capitalize;
+}
+
+.statusDot,
+.accessDot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mantine-color-gray-5);
+}
+
+.statusDot {
+  background: var(--mantine-color-gray-5);
+}
+
+.statusActiveDot {
+  background: var(--mantine-color-teal-6);
+}
+
+.heroIdentity {
+  position: relative;
+  min-height: 124px;
+  gap: 16px;
+  padding: 0 28px 22px;
+}
+
+.avatar {
+  flex: 0 0 auto;
+  margin-top: -44px;
+  border: 5px solid white;
+  background: linear-gradient(145deg, var(--mantine-color-blue-1), var(--mantine-color-cyan-1));
+  box-shadow: 0 5px 18px rgba(25, 67, 110, 0.15);
+  color: var(--mantine-color-blue-7);
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.identityCopy {
+  min-width: 0;
+  flex: 1;
+  padding-top: 16px;
+}
+
+.displayName {
+  color: var(--mantine-color-gray-9);
+  font-size: clamp(21px, 2.5vw, 27px);
+  letter-spacing: -0.035em;
+}
+
+.identityDivider {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--mantine-color-gray-4);
+}
+
+.emailText {
+  overflow-wrap: anywhere;
+}
+
+.contentGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.panel {
+  border-radius: var(--mantine-radius-xl);
+}
+
+.panelTitle {
+  color: var(--mantine-color-gray-9);
+  font-size: 16px;
+  letter-spacing: -0.015em;
+}
+
+/* Grid cells default to `min-width: auto`, so a long unbroken value (an email,
+   a license number) would widen its own track past the card. */
+.field {
+  min-width: 0;
+}
+
+.policyBox {
+  padding: 12px;
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-gray-0);
+}
+
+.accessTile {
+  min-height: 82px;
+  padding: 14px;
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: var(--mantine-radius-lg);
+  background: var(--mantine-color-gray-0);
+}
+
+.activeDot {
+  background: var(--mantine-color-teal-6);
+  box-shadow: 0 0 0 3px var(--mantine-color-teal-0);
+}
+
+.shortcut {
+  min-height: 52px;
+  border-color: var(--mantine-color-gray-2);
+  color: var(--mantine-color-gray-8);
+  transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.shortcut:hover {
+  transform: translateY(-1px);
+  border-color: var(--mantine-color-blue-3);
+  background: var(--mantine-color-blue-0);
+}
+
+.workspaceNote {
+  padding: 16px;
+  border: 1px solid var(--mantine-color-blue-1);
+  border-radius: var(--mantine-radius-lg);
+  background:
+    radial-gradient(120% 150% at 100% 0%, rgba(34, 139, 230, 0.09), transparent 65%),
+    var(--mantine-color-blue-0);
+}
+
+@media (max-width: 62em) {
+  .contentGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 36em) {
+  .cover {
+    min-height: 148px;
+    padding: 18px;
+  }
+
+  .coverLabel {
+    max-width: 62%;
+    align-items: flex-start;
+    line-height: 1.5;
+  }
+
+  .heroIdentity {
+    gap: 8px 12px;
+    padding: 0 18px 20px;
+  }
+
+  .avatar {
+    width: 82px;
+    height: 82px;
+    margin-top: -34px;
+    border-width: 4px;
+    border-radius: 24px;
+    font-size: 24px;
+  }
+
+  .identityCopy {
+    padding-top: 14px;
+  }
+}
+
+/* ==========================================================================
+   Creative layer — hero sheen, completeness pill and the password "vault"
+   ========================================================================== */
+
+/* A slow diagonal sheen sweeping the cover so the hero is never fully static.
+   The label/badge already sit at `z-index: 1`, so the sweep stays behind them. */
+.cover::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  content: '';
+  pointer-events: none;
+  background: linear-gradient(
+    102deg,
+    transparent 34%,
+    rgba(255, 255, 255, 0.22) 48%,
+    transparent 62%
+  );
+  background-size: 260% 100%;
+  animation: cover-sheen 9s ease-in-out infinite;
+}
+
+@keyframes cover-sheen {
+  0%,
+  100% {
+    background-position: 135% 0;
+  }
+
+  50% {
+    background-position: -35% 0;
+  }
+}
+
+/* Glassy progress pill. It needs the hero's width, so it is `visibleFrom="md"`. */
+.completeness {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 2px;
+  padding: 8px 18px 8px 8px;
+  border: 1px solid var(--mantine-color-gray-2);
+  border-radius: 999px;
+  background: linear-gradient(120deg, var(--mantine-color-blue-0), var(--mantine-color-cyan-0));
+}
+
+/* ---- Password & security vault ------------------------------------------ */
+.securityCard {
+  position: relative;
+}
+
+/* Hairline of light along the top edge; only lit while the form is open. */
+.securityBeam {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  opacity: 0;
+  background: linear-gradient(
+    90deg,
+    var(--mantine-color-blue-5),
+    var(--mantine-color-cyan-4),
+    var(--mantine-color-blue-5)
+  );
+  background-size: 220% 100%;
+  transition: opacity 260ms ease;
+}
+
+/* Open state: the flat border is swapped for a blue→cyan gradient border (two
+   background layers clipped to padding-box / border-box) plus a lift. */
+.securityCard[data-revealed] {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--mantine-color-white), var(--mantine-color-white)) padding-box,
+    linear-gradient(135deg, var(--mantine-color-blue-4), var(--mantine-color-cyan-4)) border-box;
+  box-shadow: 0 20px 44px rgba(23, 75, 131, 0.13);
+}
+
+.securityCard[data-revealed] .securityBeam {
+  opacity: 1;
+  animation: beam-slide 4.5s linear infinite;
+}
+
+@keyframes beam-slide {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 220% 0;
+  }
+}
+
+.vaultIcon {
+  flex: 0 0 auto;
+  color: white;
+  box-shadow: 0 8px 18px rgba(23, 75, 131, 0.24);
+}
+
+/* Resting state: an invitation to act rather than a form to fill in. */
+.vaultPrompt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 18px;
+  border: 1px dashed var(--mantine-color-gray-3);
+  border-radius: var(--mantine-radius-lg);
+  background:
+    radial-gradient(130% 150% at 0% 0%, rgba(34, 139, 230, 0.09), transparent 62%),
+    var(--mantine-color-gray-0);
+}
+
+.vaultArt {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+}
+
+/* Conic gradient punched into a doughnut by a radial mask, then slowly spun. */
+.vaultRing {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    var(--mantine-color-blue-3),
+    var(--mantine-color-cyan-2),
+    var(--mantine-color-blue-3)
+  );
+  -webkit-mask: radial-gradient(circle, transparent 62%, #000 64%);
+  mask: radial-gradient(circle, transparent 62%, #000 64%);
+  animation: vault-spin 10s linear infinite;
+}
+
+@keyframes vault-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.vaultCore {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: var(--mantine-color-blue-7);
+  background: var(--mantine-color-white);
+  box-shadow: 0 6px 16px rgba(23, 75, 131, 0.16);
+}
+
+.vaultCopy {
+  min-width: 0;
+}
+
+/* The primary call to action carries the brand gradient (the Button's own
+   `gradient` prop feeds Mantine's `--button-bg`); this rule only slides it.
+   The attribute selector is deliberate: Mantine's `.m_77c9d27d` rule sets the
+   `background` shorthand, so an equally specific class could lose on order. */
+.vaultCta[data-variant='gradient'] {
+  background-size: 205% 100%;
+  box-shadow: 0 10px 22px rgba(23, 75, 131, 0.25);
+  transition: background-position 480ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.vaultCta[data-variant='gradient']:hover {
+  background-position: 100% 0;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(23, 75, 131, 0.32);
+}
+
+/* Reveal choreography: each block lifts in just after the one above it. */
+.revealStep {
+  animation: vault-step 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.revealStep2 {
+  animation-delay: 70ms;
+}
+
+.revealStep3 {
+  animation-delay: 140ms;
+}
+
+@keyframes vault-step {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 36em) {
+  /* The artwork stacks above the copy so the CTA keeps a comfortable tap width. */
+  .vaultPrompt {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+    gap: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover::after,
+  .vaultRing,
+  .securityCard[data-revealed] .securityBeam,
+  .revealStep {
+    animation: none;
+  }
+}
