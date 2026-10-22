@@ -68,27 +68,26 @@ const normalizeMedicineType = (value?: string | null): string => {
 
 /**
  * Converts whatever the backend returns for `expiry_date` into the
- * `YYYY-MM-DD` string an `<input type="date">` expects.
+ * `YYYY-MM` string an `<input type="month">` expects.
  *
  * Deliberately does not use `new Date(value).toISOString()`: that converts to
  * UTC, so a local-midnight timestamp in a positive-offset timezone (IST, +5:30)
  * reads back as the previous day and editing a batch silently shifts its expiry.
  */
-const toDateInputValue = (value?: string | number | null): string => {
+const toMonthInputValue = (value?: string | number | null): string => {
   if (value === null || value === undefined || value === '') return '';
   const raw = String(value).trim();
 
-  // Already a calendar date (with or without a time part) — trust it verbatim.
-  const calendarDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (calendarDate) return calendarDate[1];
+  // Already a calendar date/month (with or without a time part) — trust it.
+  const calendarMonth = raw.match(/^(\d{4}-\d{2})/);
+  if (calendarMonth) return calendarMonth[1];
 
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return '';
 
-  // Fall back to local calendar parts rather than the UTC ISO date.
+  // Fall back to local calendar parts rather than the UTC ISO month.
   const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  return `${parsed.getFullYear()}-${month}-${day}`;
+  return `${parsed.getFullYear()}-${month}`;
 };
 
 interface InventoryModalFormProps {
@@ -345,7 +344,7 @@ export default function InventoryModalForm({
     setPurchasePrice(initialData.purchase_price || 0);
     setSellingPrice(initialData.selling_price || 0);
     setAlertThreshold(initialData.stock_alert_threshold || 6);
-    setExpiryDate(toDateInputValue(initialData.expiry_date));
+    setExpiryDate(toMonthInputValue(initialData.expiry_date));
     setImageUrl(initialData.image_url || '');
 
     setOriginalIdentity({
@@ -653,13 +652,13 @@ export default function InventoryModalForm({
               />
 
               <TextInput
-                type="date"
+                type="month"
                 label={renderLabelWithTooltip(
-                  'Expiry Date',
-                  'Select the exact expiry date for this batch so the system can help prevent selling expired stock.'
+                  'Expiry Month / Year',
+                  'Select the expiry month and year for this batch so the system can help prevent selling expired stock.'
                 )}
                 required
-                error={isSubmitted && !isExpiryDateValid ? "Select date" : null}
+                error={isSubmitted && !isExpiryDateValid ? "Select month and year" : null}
                 value={expiryDate}
                 onChange={(e) => setExpiryDate(e.target.value)}
                 styles={getInputStyles(isExpiryDateValid)}

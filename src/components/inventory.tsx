@@ -41,7 +41,7 @@ const SORT_OPTIONS: { value: SortOption; label: string; description: string }[] 
     { value: 'manufacturer_name', label: 'Manufacturer', description: 'Alphabetical by manufacturer' },
 ];
 
-const NEW_STOCK_THRESHOLD_DAYS = 7;
+const NEW_STOCK_THRESHOLD_DAYS = 1;
 const EXPIRY_WARNING_DAYS = 90;
 /** Medicine, Manufacturer, Batch, Compound 1, Quantity, Expiry, Status, Actions */
 const TABLE_COLUMN_COUNT = 8;
@@ -59,9 +59,12 @@ const cn = (...values: Array<string | false | null | undefined>) => values.filte
 
 function formatExpiryDate(dateStr: string | null): string {
     if (!dateStr) return '—';
-    const date = new Date(dateStr);
-    if (Number.isNaN(date.getTime())) return '—';
-    return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const expiryMonth = getExpiryMonth(dateStr);
+    if (!expiryMonth) return '—';
+    return new Date(expiryMonth.year, expiryMonth.month - 1, 1).toLocaleDateString('en-GB', {
+        month: 'short',
+        year: 'numeric',
+    });
 }
 function isNewestStock(insertDateStr: string): boolean {
     const date = new Date(insertDateStr);
@@ -72,41 +75,63 @@ function isNewestStock(insertDateStr: string): boolean {
 
 type ExpiryTone = 'past' | 'soon' | null;
 
-/** Colours the expiry cell red once lapsed and amber inside the warning window. */
-function getExpiryTone(dateStr: string | null): ExpiryTone {
-    if (!dateStr) return null;
+function getExpiryMonth(dateStr: string): { year: number; month: number } | null {
+    const isoDate = /^(\d{4})-(\d{2})/.exec(dateStr);
+    if (isoDate) {
+        const year = Number(isoDate[1]);
+        const month = Number(isoDate[2]);
+        return month >= 1 && month <= 12 ? { year, month } : null;
+    }
+
     const date = new Date(dateStr);
     if (Number.isNaN(date.getTime())) return null;
-    const diffDays = (date.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    return { year: date.getFullYear(), month: date.getMonth() + 1 };
+}
+
+/** Treats an expiry month as valid through its final day. */
+function getExpiryTone(dateStr: string | null): ExpiryTone {
+    if (!dateStr) return null;
+    const expiryMonth = getExpiryMonth(dateStr);
+    if (!expiryMonth) return null;
+
+    const expiryEnd = new Date(expiryMonth.year, expiryMonth.month, 0, 23, 59, 59, 999);
+    const diffDays = (expiryEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
     if (diffDays < 0) return 'past';
     return diffDays <= EXPIRY_WARNING_DAYS ? 'soon' : null;
 }
 function renderStatusBadge(row: InventoryRecord) {
-    if (row.stock_quantity === 0) {
-        return (
-            <Badge className={styles.statusBadge} color="red" variant="light" radius="sm">
-                Out of Stock
-            </Badge>
-        );
-    }
-    if (row.stock_quantity <= (row.stock_alert_threshold ?? 10)) {
-        return (
-            <Badge className={styles.statusBadge} color="yellow" variant="light" radius="sm">
-                Low Stock
-            </Badge>
-        );
-    }
-    if (isNewestStock(row.insert_date)) {
-        return (
-            <Badge className={styles.statusBadge} color="blue" variant="filled" radius="sm" leftSection={<IconSparkles size={12} />}>
-                Newest
-            </Badge>
-        );
-    }
+    const expiryTone = getExpiryTone(row.expiry_date);
+
     return (
-        <Badge className={styles.statusBadge} color="green" variant="light" radius="sm">
-            In Stock
-        </Badge>
+        <Stack gap={6} align="flex-start">
+            {expiryTone === 'past' && (
+                <Badge className={styles.statusBadge} color="red" variant="light" radius="sm">
+                    Expired
+                </Badge>
+            )}
+            {expiryTone === 'soon' && (
+                <Badge className={styles.statusBadge} color="orange" variant="light" radius="sm">
+                    Expiring Soon
+                </Badge>
+            )}
+            {row.stock_quantity === 0 ? (
+                <Badge className={styles.statusBadge} color="red" variant="light" radius="sm">
+                    Out of Stock
+                </Badge>
+            ) : expiryTone !== 'past' && row.stock_quantity <= (row.stock_alert_threshold ?? 10) ? (
+                <Badge className={styles.statusBadge} color="yellow" variant="light" radius="sm">
+                    Low Stock
+                </Badge>
+            ) : isNewestStock(row.insert_date) ? (
+                <Badge className={styles.statusBadge} color="blue" variant="filled" radius="sm" leftSection={<IconSparkles size={12} />}>
+                    Newest
+                </Badge>
+            ) : (
+                <Badge className={styles.statusBadge} color="green" variant="light" radius="sm">
+                    In Stock
+                </Badge>
+            )}
+        </Stack>
     );
 }
 
@@ -405,218 +430,218 @@ export default function Inventory() {
                     </Badge>
                 </Flex>
 
-                        {error && (
-                            <Alert
-                                icon={<IconAlertCircle size={18} />}
-                                color="red"
-                                variant="light"
-                                title="Unable to load inventory"
-                                radius="md"
-                                mb="md"
-                            >
-                                {error} Please verify the API server is running at {API_BASE_URL}.
-                            </Alert>
-                        )}
+                {error && (
+                    <Alert
+                        icon={<IconAlertCircle size={18} />}
+                        color="red"
+                        variant="light"
+                        title="Unable to load inventory"
+                        radius="md"
+                        mb="md"
+                    >
+                        {error} Please verify the API server is running at {API_BASE_URL}.
+                    </Alert>
+                )}
 
-                        {/*
+                {/*
                             Wide data grid — BOTH axes of overflow stay inside this
                             container, so the document itself never scrolls sideways.
                             `maxHeight` is expressed in dvh so it adapts to mobile
                             browser chrome without needing JS.
                         */}
-                        <Table.ScrollContainer
-                            minWidth={TABLE_MIN_WIDTH}
-                            type="native"
-                            styles={{
-                                scrollContainer: {
-                                    maxHeight: 'min(58dvh, 620px)',
-                                    WebkitOverflowScrolling: 'touch',
-                                    overscrollBehaviorX: 'contain',
-                                },
-                            }}
-                        >
-                            <Table
-                                /* Striping and hover tint now live in the CSS module so
-                                   the header paint, zebra rows and accent bar are styled
-                                   as one system instead of two half-applied layers. */
-                                className={styles.grid}
-                                verticalSpacing="sm"
-                                horizontalSpacing="md"
-                                withTableBorder
-                                stickyHeader
-                                fz={{ base: 'xs', sm: 'sm' }}
-                            >
-                                <Table.Thead>
-                                    <Table.Tr>
-                                        <Table.Th w="24%">Medicine Name</Table.Th>
-                                        <Table.Th w="16%">Manufacturer</Table.Th>
-                                        <Table.Th w="12%">Batch Number</Table.Th>
-                                        <Table.Th w="14%">Compound 1</Table.Th>
-                                        <Table.Th w="8%" ta="right">Quantity</Table.Th>
-                                        <Table.Th w="11%">Expiry Date</Table.Th>
-                                        <Table.Th w="8%">Status</Table.Th>
-                                        <Table.Th w="7%" ta="center">Actions</Table.Th>
-                                    </Table.Tr>
-                                </Table.Thead>
-                                <Table.Tbody>
-                                    {loading &&
-                                        Array.from({ length: SKELETON_ROW_COUNT }).map((_, rowIndex) => (
-                                            <Table.Tr key={`skeleton-${rowIndex}`}>
-                                                {Array.from({ length: TABLE_COLUMN_COUNT }).map((__, colIndex) => (
-                                                    <Table.Td key={colIndex}>
-                                                        <Skeleton height={16} radius="sm" />
-                                                    </Table.Td>
-                                                ))}
-                                            </Table.Tr>
-                                        ))}
-
-                                    {!loading && !error && sortedRecords.length === 0 && (
-                                        <Table.Tr>
-                                            <Table.Td colSpan={TABLE_COLUMN_COUNT}>
-                                                <div className={styles.emptyState}>
-                                                    <span className={styles.emptyIcon}>
-                                                        <IconInbox size={24} />
-                                                    </span>
-                                                    <Text fw={600} size="sm">
-                                                        No inventory items found
-                                                    </Text>
-                                                    <Text c="dimmed" size="xs" ta="center">
-                                                        Try a different search term, or add a new medicine to get started.
-                                                    </Text>
-                                                </div>
+                <Table.ScrollContainer
+                    minWidth={TABLE_MIN_WIDTH}
+                    type="native"
+                    styles={{
+                        scrollContainer: {
+                            maxHeight: 'min(58dvh, 620px)',
+                            WebkitOverflowScrolling: 'touch',
+                            overscrollBehaviorX: 'contain',
+                        },
+                    }}
+                >
+                    <Table
+                        /* Striping and hover tint now live in the CSS module so
+                           the header paint, zebra rows and accent bar are styled
+                           as one system instead of two half-applied layers. */
+                        className={styles.grid}
+                        verticalSpacing="sm"
+                        horizontalSpacing="md"
+                        withTableBorder
+                        stickyHeader
+                        fz={{ base: 'xs', sm: 'sm' }}
+                    >
+                        <Table.Thead>
+                            <Table.Tr>
+                                <Table.Th>Medicine Name</Table.Th>
+                                <Table.Th>Manufacturer</Table.Th>
+                                <Table.Th>Batch Number</Table.Th>
+                                <Table.Th>Compound</Table.Th>
+                                <Table.Th>Quantity</Table.Th>
+                                <Table.Th>Expiry</Table.Th>
+                                <Table.Th>Status</Table.Th>
+                                <Table.Th>Actions</Table.Th>
+                            </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                            {loading &&
+                                Array.from({ length: SKELETON_ROW_COUNT }).map((_, rowIndex) => (
+                                    <Table.Tr key={`skeleton-${rowIndex}`}>
+                                        {Array.from({ length: TABLE_COLUMN_COUNT }).map((__, colIndex) => (
+                                            <Table.Td key={colIndex}>
+                                                <Skeleton height={16} radius="sm" />
                                             </Table.Td>
-                                        </Table.Tr>
-                                    )}
+                                        ))}
+                                    </Table.Tr>
+                                ))}
 
-                                    {!loading &&
-                                        !error &&
-                                        sortedRecords.map((row) => {
-                                            const expiryTone = getExpiryTone(row.expiry_date);
-                                         
-                                            return (
-                                                <Table.Tr key={row.id}>
-                                                    <Table.Td>
-                                                       
-                                                            {row.name}
-                                                            <br/>
-                                                        {row.pack_size_label && (
-                                                            <span className={styles.packChip}>{row.pack_size_label}</span>
-                                                        )}
-                                                    </Table.Td>
-                                                    <Table.Td>
-                                                        
-                                                            {row.manufacturer_name || '—'}
-                                                    </Table.Td>
-                                                    <Table.Td>
-                                                        {row.batch_number ? (
-                                                            <span className={styles.codeChip}>{row.batch_number}</span>
-                                                        ) : (
-                                                            <span className={styles.placeholder}>—</span>
-                                                        )}
-                                                    </Table.Td>
-                                                    <Table.Td>
-                                                        <Text
-                                                            className={styles.truncate}
-                                                            title={row.composition1 || undefined}
-                                                            c={row.composition1 ? undefined : 'dimmed'}
-                                                            size="sm"
-                                                        >
-                                                            {row.composition1 || '—'}
-                                                        </Text>
-                                                    </Table.Td>
-                                                    <Table.Td className={styles.numeric}>
-                                                       
-                                                            {row.stock_quantity}
-                                                       
-                                                    </Table.Td>
-                                                    <Table.Td className={styles.numeric}>
-                                                        <span
-                                                            className={cn(
-                                                                styles.expiry,
-                                                                expiryTone === 'soon' && styles.expirySoon,
-                                                                expiryTone === 'past' && styles.expiryPast
-                                                            )}
-                                                        >
-                                                            {formatExpiryDate(row.expiry_date)}
-                                                        </span>
-                                                    </Table.Td>
-                                                    <Table.Td>{renderStatusBadge(row)}</Table.Td>
-                                                    <Table.Td>
-                                                        <Group justify="center" gap="xs" wrap="nowrap">
-                                                            {/* `data-touch-target` bumps these
+                            {!loading && !error && sortedRecords.length === 0 && (
+                                <Table.Tr>
+                                    <Table.Td colSpan={TABLE_COLUMN_COUNT}>
+                                        <div className={styles.emptyState}>
+                                            <span className={styles.emptyIcon}>
+                                                <IconInbox size={24} />
+                                            </span>
+                                            <Text fw={600} size="sm">
+                                                No inventory items found
+                                            </Text>
+                                            <Text c="dimmed" size="xs" ta="center">
+                                                Try a different search term, or add a new medicine to get started.
+                                            </Text>
+                                        </div>
+                                    </Table.Td>
+                                </Table.Tr>
+                            )}
+
+                            {!loading &&
+                                !error &&
+                                sortedRecords.map((row) => {
+                                    const expiryTone = getExpiryTone(row.expiry_date);
+
+                                    return (
+                                        <Table.Tr key={row.id}>
+                                            <Table.Td>
+
+                                                {row.name}
+                                                <br />
+                                                {row.pack_size_label && (
+                                                    <span className={styles.packChip}>{row.pack_size_label}</span>
+                                                )}
+                                            </Table.Td>
+                                            <Table.Td>
+
+                                                {row.manufacturer_name || '—'}
+                                            </Table.Td>
+                                            <Table.Td>
+                                                {row.batch_number ? (
+                                                    <span className={styles.codeChip}>{row.batch_number}</span>
+                                                ) : (
+                                                    <span className={styles.placeholder}>—</span>
+                                                )}
+                                            </Table.Td>
+                                            <Table.Td>
+                                                <Text
+                                                    className={styles.truncate}
+                                                    title={row.composition1 || undefined}
+                                                    c={row.composition1 ? undefined : 'dimmed'}
+                                                    size="sm"
+                                                >
+                                                    {row.composition1 || '—'}
+                                                </Text>
+                                            </Table.Td>
+                                            <Table.Td className={styles.numeric}>
+
+                                                {row.stock_quantity}
+
+                                            </Table.Td>
+                                            <Table.Td className={styles.numeric}>
+                                                <span
+                                                    className={cn(
+                                                        styles.expiry,
+                                                        expiryTone === 'soon' && styles.expirySoon,
+                                                        expiryTone === 'past' && styles.expiryPast
+                                                    )}
+                                                >
+                                                    {formatExpiryDate(row.expiry_date)}
+                                                </span>
+                                            </Table.Td>
+                                            <Table.Td>{renderStatusBadge(row)}</Table.Td>
+                                            <Table.Td>
+                                                <Group justify="center" gap="xs" wrap="nowrap">
+                                                    {/* `data-touch-target` bumps these
                                                                 icon buttons to a 44px hit area on
                                                                 touch devices only (see index.css). */}
-                                                            <ActionIcon
-                                                                data-touch-target
-                                                                className={styles.iconButton}
-                                                                variant="subtle"
-                                                                color="blue"
-                                                                radius="md"
-                                                                size={32}
-                                                                onClick={() => handleUpdateRecord(row)}
-                                                                aria-label={`Edit ${row.name}`}
-                                                            >
-                                                                <IconEdit size={16} />
-                                                            </ActionIcon>
+                                                    <ActionIcon
+                                                        data-touch-target
+                                                        className={styles.iconButton}
+                                                        variant="subtle"
+                                                        color="blue"
+                                                        radius="md"
+                                                        size={32}
+                                                        onClick={() => handleUpdateRecord(row)}
+                                                        aria-label={`Edit ${row.name}`}
+                                                    >
+                                                        <IconEdit size={16} />
+                                                    </ActionIcon>
 
-                                                            <ActionIcon
-                                                                data-touch-target
-                                                                className={styles.iconButton}
-                                                                variant="subtle"
-                                                                color="red"
-                                                                radius="md"
-                                                                size={32}
-                                                                onClick={() => setDeleteRecord(row)}
-                                                                aria-label={`Delete ${row.name}`}
-                                                            >
-                                                                <IconTrash size={16} />
-                                                            </ActionIcon>
-                                                        </Group>
-                                                    </Table.Td>
-                                                </Table.Tr>
-                                            );
-                                        })}
-                                </Table.Tbody>
-                            </Table>
-                        </Table.ScrollContainer>
+                                                    <ActionIcon
+                                                        data-touch-target
+                                                        className={styles.iconButton}
+                                                        variant="subtle"
+                                                        color="red"
+                                                        radius="md"
+                                                        size={32}
+                                                        onClick={() => setDeleteRecord(row)}
+                                                        aria-label={`Delete ${row.name}`}
+                                                    >
+                                                        <IconTrash size={16} />
+                                                    </ActionIcon>
+                                                </Group>
+                                            </Table.Td>
+                                        </Table.Tr>
+                                    );
+                                })}
+                        </Table.Tbody>
+                    </Table>
+                </Table.ScrollContainer>
 
-                        {/* Panning hint — only meaningful while the grid is
+                {/* Panning hint — only meaningful while the grid is
                             actually overflowing, i.e. below the `md` breakpoint. */}
-                        <Text size="xs" c="dimmed" ta="center" mt="xs" hiddenFrom="md">
-                            Swipe the table sideways to see every column
-                        </Text>
+                <Text size="xs" c="dimmed" ta="center" mt="xs" hiddenFrom="md">
+                    Swipe the table sideways to see every column
+                </Text>
 
-                        {/* Pagination bar: stacked and centered on phones, a
+                {/* Pagination bar: stacked and centered on phones, a
                             single spread row from `sm` up. */}
-                        <Flex
-                            direction={{ base: 'column-reverse', sm: 'row' }}
-                            justify={{ base: 'center', sm: 'space-between' }}
-                            align="center"
-                            gap="sm"
-                            mt="md"
-                        >
-                            <Select
-                                value={String(pageSize)}
-                                onChange={(value) => setPageSize(Number(value) || 10)}
-                                data={['5', '10', '20', '50']}
-                                leftSection={<IconListDetails size={16} />}
-                                w={{ base: '100%', sm: '6rem' }}
-                                size="sm"
-                                radius="md"
-                                allowDeselect={false}
-                            />
-                            {totalPages > 1 && (
-                                <Pagination
-                                    total={totalPages}
-                                    value={activePage}
-                                    onChange={setActivePage}
-                                    size="sm"
-                                    boundaries={1}
-                                    siblings={1}
-                                />
-                            )}
-                        </Flex>
-                    </Paper>
+                <Flex
+                    direction={{ base: 'column-reverse', sm: 'row' }}
+                    justify={{ base: 'center', sm: 'space-between' }}
+                    align="center"
+                    gap="sm"
+                    mt="md"
+                >
+                    <Select
+                        value={String(pageSize)}
+                        onChange={(value) => setPageSize(Number(value) || 10)}
+                        data={['5', '10', '20', '50']}
+                        leftSection={<IconListDetails size={16} />}
+                        w={{ base: '100%', sm: '6rem' }}
+                        size="sm"
+                        radius="md"
+                        allowDeselect={false}
+                    />
+                    {totalPages > 1 && (
+                        <Pagination
+                            total={totalPages}
+                            value={activePage}
+                            onChange={setActivePage}
+                            size="sm"
+                            boundaries={1}
+                            siblings={1}
+                        />
+                    )}
+                </Flex>
+            </Paper>
 
             <Modal
                 opened={!!deleteRecord}

@@ -111,7 +111,7 @@
 /* ---- Numeric cells ------------------------------------------------------- */
 
 .numeric {
-  text-align: right;
+  text-align: left;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
